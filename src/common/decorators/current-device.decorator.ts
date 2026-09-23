@@ -1,11 +1,9 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import type { RequestWithDeviceId } from '../guards/device.guard.js';
+import type { Device } from '../../modules/device/index.js';
+import type { RequestWithDevice } from '../guards/device.guard.js';
 
-/**
- * Returns the device id attached by DeviceGuard. Will return the resolved
- * Device row instead once the device module exists.
- */
-export const CurrentDevice = createParamDecorator((_: unknown, ctx: ExecutionContext): string => {
-  const request = ctx.switchToHttp().getRequest<RequestWithDeviceId>();
-  return request.deviceId;
+/** The resolved Device row — only valid on routes DeviceGuard has fully resolved (i.e. not @SkipDeviceLookup() or @Public() ones). */
+export const CurrentDevice = createParamDecorator((_: unknown, ctx: ExecutionContext): Device => {
+  const request = ctx.switchToHttp().getRequest<RequestWithDevice>();
+  return request.device as Device;
 });
