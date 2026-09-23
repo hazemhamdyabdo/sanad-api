@@ -138,7 +138,8 @@ export class ConversationService {
       section: reply.section,
       type: 'section_card',
       text: null,
-      card: reply.card,
+      // reply.card's exact shape depends on reply.section (see sectionReplySchema); by now it's already zod-validated.
+      card: reply.card as Record<string, unknown> | unknown[] | null,
       quickReplies: null,
       source: null,
       audioDurationSec: null,

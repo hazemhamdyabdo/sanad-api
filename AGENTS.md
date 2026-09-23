@@ -121,3 +121,5 @@ These are what keep it scalable when jobs, applications, and notifications land 
 - Never log CVs, audio, phone numbers, or emails.
 - Secrets in `.env` only, with `.env.example` kept current. Never commit a key.
 - When we agree to postpone something, add a one-line item to `TODO.md`.
+- From now on, don't start the API server yourself — I keep it running. 
+  If you need it restarted, tell me instead.

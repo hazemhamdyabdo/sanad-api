@@ -22,8 +22,9 @@ export class Message {
   @Column({ type: 'text', nullable: true })
   text!: string | null;
 
+  /** An object for most sections, but an array for skills/languages — a user typically names several at once. */
   @Column({ type: 'jsonb', nullable: true })
-  card!: Record<string, unknown> | null;
+  card!: Record<string, unknown> | unknown[] | null;
 
   @Column({ type: 'jsonb', nullable: true })
   quickReplies!: string[] | null;

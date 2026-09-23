@@ -8,7 +8,7 @@ export interface MessageResponseDto {
   section: SectionId | null;
   type: MessageType;
   text: string | null;
-  card?: Record<string, unknown> | null;
+  card?: Record<string, unknown> | unknown[] | null;
   quickReplies?: string[] | null;
   source?: MessageSource | null;
   audioDurationSec?: number | null;
