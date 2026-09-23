@@ -1,9 +1,17 @@
+import { Logger } from '@nestjs/common';
 import type { LlmCompletionOptions, LlmProvider } from '../llm.interface.js';
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
 
+interface MistralUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 interface MistralChatResponse {
   choices: Array<{ message: { content: string } }>;
+  usage?: MistralUsage;
 }
 
 interface MistralStreamChunk {
@@ -12,6 +20,8 @@ interface MistralStreamChunk {
 
 /** Talks to the Mistral chat completions API directly over fetch — no SDK dependency needed for a shape this simple. */
 export class MistralProvider implements LlmProvider {
+  private readonly logger = new Logger(MistralProvider.name);
+
   constructor(
     private readonly apiKey: string,
     private readonly model: string,
@@ -36,6 +46,9 @@ export class MistralProvider implements LlmProvider {
     }
 
     const data = (await response.json()) as MistralChatResponse;
+    if (data.usage) {
+      this.logger.log(`usage: prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens} model=${this.model}`);
+    }
     return data.choices[0]?.message.content ?? '';
   }
 
