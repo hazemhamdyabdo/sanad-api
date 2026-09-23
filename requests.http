@@ -50,3 +50,74 @@ X-Device-Id: not-a-uuid
   "locale": "ar-EG",
   "region": "EG"
 }
+
+### A device that's never been registered — NOT_FOUND (from DeviceGuard's DB lookup, not DEVICE_REQUIRED)
+GET {{baseUrl}}/conversations/cnv_doesnotexist
+X-Device-Id: 00000000-0000-4000-8000-000000000000
+
+### Start a new conversation (build mode) — 201, sections + currentSection: "basic"
+# @deviceId must already be registered via the requests above.
+POST {{baseUrl}}/conversations
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "mode": "build",
+  "uploadId": null
+}
+
+### POST /devices again — state now reflects the active session (activeSessionId, nextSection: "basic")
+POST {{baseUrl}}/devices
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "platform": "android",
+  "appVersion": "1.0.0",
+  "locale": "ar-EG",
+  "region": "EG"
+}
+
+### GET the session back
+# Replace :sessionId with the id returned by "Start a new conversation" above.
+GET {{baseUrl}}/conversations/:sessionId
+X-Device-Id: {{deviceId}}
+
+### Start another conversation without restart — 409 with activeSessionId
+POST {{baseUrl}}/conversations
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "mode": "build"
+}
+
+### Start another conversation WITH restart:true — deletes the old session (and its cv, if any), creates a new one
+POST {{baseUrl}}/conversations
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "mode": "build",
+  "restart": true
+}
+
+### mode: "upload" — not implemented yet (no upload module), INVALID_REQUEST
+POST {{baseUrl}}/conversations
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "mode": "upload",
+  "uploadId": "upl_someid"
+}
+
+### Delete the session (and its cv) — 204
+# Replace :sessionId with a real session id first.
+DELETE {{baseUrl}}/conversations/:sessionId
+X-Device-Id: {{deviceId}}
+
+### GET a session belonging to a different device — NOT_FOUND (ownership check, doesn't leak existence)
+# X-Device-Id below must belong to a registered device other than the session's owner.
+GET {{baseUrl}}/conversations/:sessionId
+X-Device-Id: 00000000-0000-4000-8000-000000000001

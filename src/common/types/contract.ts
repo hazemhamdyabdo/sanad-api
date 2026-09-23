@@ -38,3 +38,22 @@ export type SectionStatus = (typeof SECTION_STATUSES)[number];
 
 export const UPLOAD_STATUSES = ['parsing', 'done', 'failed'] as const;
 export type UploadStatus = (typeof UPLOAD_STATUSES)[number];
+
+/** Arabic labels for each section — the contract shows these as examples, not a fixed enum, so wording here isn't a contract commitment. */
+export const SECTION_LABELS: Record<SectionId, string> = {
+  basic: 'البيانات الأساسية',
+  experience: 'الخبرات',
+  projects: 'المشاريع',
+  education: 'التعليم',
+  certificates: 'الشهادات',
+  skills: 'المهارات',
+  languages: 'اللغات',
+};
+
+/**
+ * A brand-new "build" session starts with this order. `experience` vs
+ * `projects` is meant to be decided by the AI once it learns whether the
+ * user has worked before (see API-CONTRACT.md) — that decision doesn't
+ * exist yet, so this defaults to `experience`.
+ */
+export const DEFAULT_BUILD_SECTIONS: SectionId[] = ['basic', 'experience', 'education', 'certificates', 'skills', 'languages'];

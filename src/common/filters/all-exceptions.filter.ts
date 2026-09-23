@@ -2,6 +2,7 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logge
 import type { Response } from 'express';
 import { AppError } from '../errors/app-error.js';
 import type { ErrorCode } from '../errors/error-codes.js';
+import { RawResponseException } from '../errors/raw-response.exception.js';
 
 interface ErrorBody {
   code: ErrorCode;
@@ -44,6 +45,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
       response.status(exception.statusCode).json({
         error: { code: exception.code, message: exception.message, retryable: exception.retryable },
       } satisfies { error: ErrorBody });
+      return;
+    }
+
+    if (exception instanceof RawResponseException) {
+      response.status(exception.getStatus()).json(exception.getResponse());
       return;
     }
 

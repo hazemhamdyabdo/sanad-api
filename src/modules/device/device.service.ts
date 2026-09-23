@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { ConversationService } from '../conversation/index.js';
+import { CvService } from '../cv/index.js';
 import { DeviceRepository } from './device.repository.js';
 import type { Device } from './entities/device.entity.js';
 import type { RegisterDeviceDto } from './dto/register-device.dto.js';
@@ -6,7 +8,11 @@ import type { DeviceResponseDto } from './dto/device-response.dto.js';
 
 @Injectable()
 export class DeviceService {
-  constructor(private readonly deviceRepository: DeviceRepository) {}
+  constructor(
+    private readonly deviceRepository: DeviceRepository,
+    private readonly conversationService: ConversationService,
+    private readonly cvService: CvService,
+  ) {}
 
   findById(id: string): Promise<Device | null> {
     return this.deviceRepository.findById(id);
@@ -27,17 +33,20 @@ export class DeviceService {
     return this.toResponseDto(device);
   }
 
-  private toResponseDto(device: Device): DeviceResponseDto {
+  private async toResponseDto(device: Device): Promise<DeviceResponseDto> {
+    const [hasCv, sessionSummary] = await Promise.all([
+      this.cvService.existsForDevice(device.id),
+      this.conversationService.getActiveSessionSummary(device.id),
+    ]);
+
     return {
       deviceId: device.id,
       createdAt: device.createdAt.toISOString(),
-      // The conversation and cv modules don't exist yet — nothing can have
-      // an active session or a CV until they do (see TODO.md).
       state: {
-        hasCv: false,
-        activeSessionId: null,
-        completedSections: [],
-        nextSection: null,
+        hasCv,
+        activeSessionId: sessionSummary.activeSessionId,
+        completedSections: sessionSummary.completedSections,
+        nextSection: sessionSummary.nextSection,
       },
     };
   }

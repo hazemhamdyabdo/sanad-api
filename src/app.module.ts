@@ -8,6 +8,8 @@ import { validateEnv } from './config/env.schema.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { DeviceGuard } from './common/guards/device.guard.js';
 import { DatabaseModule } from './database/database.module.js';
+import { ConversationModule } from './modules/conversation/index.js';
+import { CvModule } from './modules/cv/index.js';
 import { DeviceModule } from './modules/device/index.js';
 
 @Module({
@@ -19,6 +21,8 @@ import { DeviceModule } from './modules/device/index.js';
     }),
     DatabaseModule,
     DeviceModule,
+    ConversationModule,
+    CvModule,
   ],
   controllers: [AppController],
   providers: [
