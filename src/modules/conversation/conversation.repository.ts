@@ -30,4 +30,8 @@ export class ConversationRepository {
   findMessagesBySessionId(sessionId: string): Promise<Message[]> {
     return this.messageRepo.find({ where: { sessionId }, order: { sequence: 'ASC' } });
   }
+
+  createMessage(message: Omit<Message, 'sequence' | 'createdAt'>): Promise<Message> {
+    return this.messageRepo.save(message);
+  }
 }

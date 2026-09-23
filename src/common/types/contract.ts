@@ -57,3 +57,6 @@ export const SECTION_LABELS: Record<SectionId, string> = {
  * exist yet, so this defaults to `experience`.
  */
 export const DEFAULT_BUILD_SECTIONS: SectionId[] = ['basic', 'experience', 'education', 'certificates', 'skills', 'languages'];
+
+/** The fixed action pair shown on every section_card, per the contract's example. */
+export const SECTION_CARD_ACTIONS = ['تأكيد', 'تعديل'] as const;

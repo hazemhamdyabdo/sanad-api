@@ -1,14 +1,8 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { Response } from 'express';
 import { AppError } from '../errors/app-error.js';
-import type { ErrorCode } from '../errors/error-codes.js';
 import { RawResponseException } from '../errors/raw-response.exception.js';
-
-interface ErrorBody {
-  code: ErrorCode;
-  message: string;
-  retryable: boolean;
-}
+import { INTERNAL_ERROR_BODY, toErrorBody, type ErrorBody } from '../errors/to-error-body.js';
 
 const GENERIC_BY_STATUS: Record<number, ErrorBody> = {
   [HttpStatus.BAD_REQUEST]: {
@@ -28,12 +22,6 @@ const GENERIC_BY_STATUS: Record<number, ErrorBody> = {
   },
 };
 
-const FALLBACK: ErrorBody = {
-  code: 'INTERNAL',
-  message: 'حصل خطأ غير متوقع، جرب تاني',
-  retryable: true,
-};
-
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -42,9 +30,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
 
     if (exception instanceof AppError) {
-      response.status(exception.statusCode).json({
-        error: { code: exception.code, message: exception.message, retryable: exception.retryable },
-      } satisfies { error: ErrorBody });
+      response.status(exception.statusCode).json({ error: toErrorBody(exception) });
       return;
     }
 
@@ -56,11 +42,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       this.logger.warn(exception.getResponse());
-      response.status(status).json({ error: GENERIC_BY_STATUS[status] ?? FALLBACK });
+      response.status(status).json({ error: GENERIC_BY_STATUS[status] ?? INTERNAL_ERROR_BODY });
       return;
     }
 
     this.logger.error(exception instanceof Error ? exception.stack : exception);
-    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ error: FALLBACK });
+    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ error: INTERNAL_ERROR_BODY });
   }
 }

@@ -121,3 +121,28 @@ X-Device-Id: {{deviceId}}
 # X-Device-Id below must belong to a registered device other than the session's owner.
 GET {{baseUrl}}/conversations/:sessionId
 X-Device-Id: 00000000-0000-4000-8000-000000000001
+
+### Send a message — SSE. This editor's REST Client can't render a stream well; use curl (see README-style note below).
+# Replace :sessionId with a real, in_progress session id.
+# Short text (<=15 chars) -> no section_card. Longer text -> sectionDone + section_card.
+# curl -sN -X POST {{baseUrl}}/conversations/:sessionId/messages \
+#   -H "Content-Type: application/json" -H "X-Device-Id: {{deviceId}}" \
+#   -d '{"text":"some longer answer here to trigger sectionDone","source":"text"}'
+POST {{baseUrl}}/conversations/:sessionId/messages
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "text": "some longer answer here to trigger sectionDone",
+  "source": "text"
+}
+
+### Send a message to a session that isn't in_progress (e.g. already deleted) — INVALID_REQUEST
+POST {{baseUrl}}/conversations/:sessionId/messages
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "text": "hello",
+  "source": "text"
+}

@@ -1,12 +1,15 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import type { SectionReply } from '../../ai/index.js';
 import { generateId } from '../../common/ids.js';
 import { AppError } from '../../common/errors/app-error.js';
 import { RawResponseException } from '../../common/errors/raw-response.exception.js';
 import { DEFAULT_BUILD_SECTIONS, SECTION_LABELS, type SectionId } from '../../common/types/contract.js';
+import type { LlmMessage } from '../../integrations/llm/llm.interface.js';
 import { CvService } from '../cv/index.js';
 import { ConversationRepository } from './conversation.repository.js';
-import type { ConversationResponseDto, MessageResponseDto } from './dto/conversation-response.dto.js';
+import { toMessageResponseDto, type ConversationResponseDto } from './dto/conversation-response.dto.js';
 import type { CreateConversationDto } from './dto/create-conversation.dto.js';
+import type { SendMessageDto } from './dto/send-message.dto.js';
 import type { ConversationSession, SessionSection } from './entities/conversation-session.entity.js';
 import type { Message } from './entities/message.entity.js';
 
@@ -80,6 +83,73 @@ export class ConversationService {
     };
   }
 
+  /** Only sessions still `in_progress` can be messaged. */
+  async getActiveOwnedSession(sessionId: string, deviceId: string): Promise<ConversationSession> {
+    const session = await this.getOwnedSession(sessionId, deviceId);
+    if (session.status !== 'in_progress') {
+      throw new AppError('INVALID_REQUEST', 'الجلسة دي خلصت خلاص', { retryable: false });
+    }
+    return session;
+  }
+
+  /** Prior text messages, oldest first, mapped for the LLM prompt — section_card messages have no natural-language text and are skipped. */
+  async getMessageHistoryForPrompt(sessionId: string): Promise<LlmMessage[]> {
+    const messages = await this.conversationRepository.findMessagesBySessionId(sessionId);
+    return messages
+      .filter((message) => message.type === 'text' && message.text)
+      .map((message) => ({ role: message.role === 'ai' ? ('assistant' as const) : ('user' as const), content: message.text as string }));
+  }
+
+  appendUserMessage(session: ConversationSession, dto: SendMessageDto): Promise<Message> {
+    return this.conversationRepository.createMessage({
+      id: generateId('msg'),
+      sessionId: session.id,
+      role: 'user',
+      section: session.currentSection,
+      type: 'text',
+      text: dto.text,
+      card: null,
+      quickReplies: null,
+      source: dto.source,
+      audioDurationSec: dto.audioDurationSec ?? null,
+    });
+  }
+
+  appendAiTextMessage(session: ConversationSession, reply: SectionReply): Promise<Message> {
+    return this.conversationRepository.createMessage({
+      id: generateId('msg'),
+      sessionId: session.id,
+      role: 'ai',
+      section: reply.section,
+      type: 'text',
+      text: reply.message,
+      card: null,
+      quickReplies: null,
+      source: null,
+      audioDurationSec: null,
+    });
+  }
+
+  appendSectionCardMessage(session: ConversationSession, reply: SectionReply): Promise<Message> {
+    return this.conversationRepository.createMessage({
+      id: generateId('msg'),
+      sessionId: session.id,
+      role: 'ai',
+      section: reply.section,
+      type: 'section_card',
+      text: null,
+      card: reply.card,
+      quickReplies: null,
+      source: null,
+      audioDurationSec: null,
+    });
+  }
+
+  isLastSection(session: ConversationSession, sectionId: SectionId): boolean {
+    const index = session.sections.findIndex((section) => section.id === sectionId);
+    return index !== -1 && index === session.sections.length - 1;
+  }
+
   private async getOwnedSession(sessionId: string, deviceId: string): Promise<ConversationSession> {
     const session = await this.conversationRepository.findById(sessionId);
     if (!session || session.deviceId !== deviceId) {
@@ -107,18 +177,7 @@ export class ConversationService {
       mode: session.mode,
       sections: session.sections,
       currentSection: session.currentSection,
-      messages: messages.map((message): MessageResponseDto => ({
-        id: message.id,
-        role: message.role,
-        section: message.section,
-        type: message.type,
-        text: message.text,
-        card: message.card,
-        quickReplies: message.quickReplies,
-        source: message.source,
-        audioDurationSec: message.audioDurationSec,
-        createdAt: message.createdAt.toISOString(),
-      })),
+      messages: messages.map(toMessageResponseDto),
       status: session.status,
     };
   }
