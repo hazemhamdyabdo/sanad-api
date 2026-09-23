@@ -58,6 +58,17 @@ const languagesCardSchema = z
   )
   .min(1);
 
+/** Exported so other modules (e.g. validating a user's `edits` to a card before confirming a section) can reuse the exact same shape the AI's output is checked against. */
+export const CARD_SCHEMA_BY_SECTION: Record<SectionId, z.ZodType> = {
+  basic: basicCardSchema,
+  experience: experienceCardSchema,
+  projects: projectsCardSchema,
+  education: educationCardSchema,
+  certificates: certificateCardSchema,
+  skills: skillsCardSchema,
+  languages: languagesCardSchema,
+};
+
 function sectionVariant<Id extends SectionId>(id: Id, cardSchema: z.ZodType) {
   return z.object({
     message: text(),
@@ -69,13 +80,13 @@ function sectionVariant<Id extends SectionId>(id: Id, cardSchema: z.ZodType) {
 
 /** Each section's card has its own shape — kept in sync with the field list `ai/prompts/section-reply.prompt.ts` puts in the system message. */
 const sectionReplyUnion = z.discriminatedUnion('section', [
-  sectionVariant('basic', basicCardSchema),
-  sectionVariant('experience', experienceCardSchema),
-  sectionVariant('projects', projectsCardSchema),
-  sectionVariant('education', educationCardSchema),
-  sectionVariant('certificates', certificateCardSchema),
-  sectionVariant('skills', skillsCardSchema),
-  sectionVariant('languages', languagesCardSchema),
+  sectionVariant('basic', CARD_SCHEMA_BY_SECTION.basic),
+  sectionVariant('experience', CARD_SCHEMA_BY_SECTION.experience),
+  sectionVariant('projects', CARD_SCHEMA_BY_SECTION.projects),
+  sectionVariant('education', CARD_SCHEMA_BY_SECTION.education),
+  sectionVariant('certificates', CARD_SCHEMA_BY_SECTION.certificates),
+  sectionVariant('skills', CARD_SCHEMA_BY_SECTION.skills),
+  sectionVariant('languages', CARD_SCHEMA_BY_SECTION.languages),
 ]);
 
 /**

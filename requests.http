@@ -146,3 +146,59 @@ X-Device-Id: {{deviceId}}
   "text": "hello",
   "source": "text"
 }
+
+### Confirm a section — needs a real messageId from a section_card event above, and :sessionId's currentSection must equal :sectionId.
+# Response: { section, status: "confirmed", nextSection, sessionStatus, cvId } — cvId is null unless isLast: true.
+POST {{baseUrl}}/conversations/:sessionId/sections/basic/confirm
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "messageId": "msg_replace_with_a_real_section_card_id",
+  "isLast": false,
+  "edits": null
+}
+
+### Confirm with edits — replaces the card content with the given shape (validated against that section's schema, same as the AI's own output).
+POST {{baseUrl}}/conversations/:sessionId/sections/basic/confirm
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "messageId": "msg_replace_with_a_real_section_card_id",
+  "isLast": false,
+  "edits": { "name": "Mohamed Ali", "title": "Software Engineer", "phone": null, "email": null, "location": "Cairo" }
+}
+
+### Confirm a section that isn't the current one — INVALID_REQUEST
+POST {{baseUrl}}/conversations/:sessionId/sections/skills/confirm
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "messageId": "msg_replace_with_a_real_section_card_id",
+  "isLast": false,
+  "edits": null
+}
+
+### Confirm with a messageId that has no card — INVALID_REQUEST
+POST {{baseUrl}}/conversations/:sessionId/sections/basic/confirm
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "messageId": "msg_replace_with_a_plain_text_message_id",
+  "isLast": false,
+  "edits": null
+}
+
+### Confirm the last section — closes the CV: nextSection null, sessionStatus "completed", cvId returned
+POST {{baseUrl}}/conversations/:sessionId/sections/languages/confirm
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "messageId": "msg_replace_with_a_real_section_card_id",
+  "isLast": true,
+  "edits": null
+}

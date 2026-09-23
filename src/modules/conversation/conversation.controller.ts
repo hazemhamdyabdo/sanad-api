@@ -6,9 +6,11 @@ import { CurrentDevice } from '../../common/decorators/current-device.decorator.
 import { toErrorBody } from '../../common/errors/to-error-body.js';
 import { SseWriter } from '../../common/sse/sse-writer.js';
 import { tokenize } from '../../common/sse/tokenize.js';
-import { SECTION_CARD_ACTIONS } from '../../common/types/contract.js';
+import { SECTION_CARD_ACTIONS, type SectionId } from '../../common/types/contract.js';
 import type { Device } from '../device/index.js';
 import { ConversationService } from './conversation.service.js';
+import { ConfirmSectionDto } from './dto/confirm-section.dto.js';
+import type { ConfirmSectionResponseDto } from './dto/confirm-section-response.dto.js';
 import { toMessageResponseDto, type ConversationResponseDto } from './dto/conversation-response.dto.js';
 import { CreateConversationDto } from './dto/create-conversation.dto.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
@@ -38,6 +40,16 @@ export class ConversationController {
     return this.conversationService.deleteByIdForDevice(sessionId, device.id);
   }
 
+  @Post(':sessionId/sections/:sectionId/confirm')
+  confirmSection(
+    @CurrentDevice() device: Device,
+    @Param('sessionId') sessionId: string,
+    @Param('sectionId') sectionId: string,
+    @Body() dto: ConfirmSectionDto,
+  ): Promise<ConfirmSectionResponseDto> {
+    return this.conversationService.confirmSection(sessionId, device.id, sectionId as SectionId, dto);
+  }
+
   @Post(':sessionId/messages')
   async sendMessage(
     @CurrentDevice() device: Device,
@@ -48,7 +60,8 @@ export class ConversationController {
     // Validation and ownership checks happen before we touch the response,
     // so a bad request still gets a normal JSON error, not a broken stream.
     const session = await this.conversationService.getActiveOwnedSession(sessionId, device.id);
-    const history = await this.conversationService.getMessageHistoryForPrompt(session.id);
+    const section = session.currentSection ?? 'basic';
+    const history = await this.conversationService.getMessageHistoryForPrompt(session.id, section);
 
     // Saved before the AI starts, per the contract — a dropped connection
     // can always be recovered with GET /conversations/:sessionId.

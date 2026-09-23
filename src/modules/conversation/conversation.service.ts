@@ -1,12 +1,16 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import type { SectionReply } from '../../ai/index.js';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
+import { CARD_SCHEMA_BY_SECTION, type SectionReply } from '../../ai/index.js';
 import { generateId } from '../../common/ids.js';
 import { AppError } from '../../common/errors/app-error.js';
 import { RawResponseException } from '../../common/errors/raw-response.exception.js';
-import { DEFAULT_BUILD_SECTIONS, SECTION_LABELS, type SectionId } from '../../common/types/contract.js';
+import { DEFAULT_BUILD_SECTIONS, SECTION_LABELS, type SectionId, type SessionStatus } from '../../common/types/contract.js';
 import type { LlmMessage } from '../../integrations/llm/llm.interface.js';
 import { CvService } from '../cv/index.js';
 import { ConversationRepository } from './conversation.repository.js';
+import type { ConfirmSectionDto } from './dto/confirm-section.dto.js';
+import type { ConfirmSectionResponseDto } from './dto/confirm-section-response.dto.js';
 import { toMessageResponseDto, type ConversationResponseDto } from './dto/conversation-response.dto.js';
 import type { CreateConversationDto } from './dto/create-conversation.dto.js';
 import type { SendMessageDto } from './dto/send-message.dto.js';
@@ -24,6 +28,7 @@ export class ConversationService {
   constructor(
     private readonly conversationRepository: ConversationRepository,
     private readonly cvService: CvService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async create(deviceId: string, dto: CreateConversationDto): Promise<ConversationResponseDto> {
@@ -92,11 +97,17 @@ export class ConversationService {
     return session;
   }
 
-  /** Prior text messages, oldest first, mapped for the LLM prompt — section_card messages have no natural-language text and are skipped. */
-  async getMessageHistoryForPrompt(sessionId: string): Promise<LlmMessage[]> {
+  /**
+   * Prior text messages for the CURRENT section only, oldest first, mapped
+   * for the LLM prompt — section_card messages have no natural-language text
+   * and are skipped, and other sections' chatter is excluded so the model
+   * (and the fake provider, which counts entries this way) only ever sees
+   * this section's own back-and-forth.
+   */
+  async getMessageHistoryForPrompt(sessionId: string, section: SectionId): Promise<LlmMessage[]> {
     const messages = await this.conversationRepository.findMessagesBySessionId(sessionId);
     return messages
-      .filter((message) => message.type === 'text' && message.text)
+      .filter((message) => message.type === 'text' && message.text && message.section === section)
       .map((message) => ({ role: message.role === 'ai' ? ('assistant' as const) : ('user' as const), content: message.text as string }));
   }
 
@@ -151,6 +162,76 @@ export class ConversationService {
     return index !== -1 && index === session.sections.length - 1;
   }
 
+  /**
+   * Confirms the message's card into the CV (applying `edits` if given),
+   * marks the section confirmed, and advances currentSection. Section order
+   * comes from the session's own `sections` list — not the client's `isLast`
+   * flag, which is accepted for contract-shape compliance but not otherwise
+   * trusted — so the upload flow (a different, shorter section list) works
+   * here unchanged later.
+   */
+  async confirmSection(
+    sessionId: string,
+    deviceId: string,
+    sectionId: SectionId,
+    dto: ConfirmSectionDto,
+  ): Promise<ConfirmSectionResponseDto> {
+    const session = await this.getActiveOwnedSession(sessionId, deviceId);
+
+    if (session.currentSection !== sectionId) {
+      throw new AppError('INVALID_REQUEST', 'السكشن ده مش اللي دورك عليه دلوقتي', { retryable: false });
+    }
+
+    const message = await this.conversationRepository.findMessageById(dto.messageId);
+    if (!message || message.sessionId !== session.id) {
+      throw new AppError('NOT_FOUND', 'الرسالة دي مش موجودة', { retryable: false });
+    }
+    if (message.type !== 'section_card' || message.section !== sectionId || message.card === null) {
+      throw new AppError('INVALID_REQUEST', 'الرسالة دي مالهاش كارت للسكشن ده', { retryable: false });
+    }
+
+    const content = this.resolveSectionContent(sectionId, message.card, dto.edits);
+
+    const sectionIndex = session.sections.findIndex((section) => section.id === sectionId);
+    const nextSection = session.sections[sectionIndex + 1]?.id ?? null;
+    const sessionStatus: SessionStatus = nextSection === null ? 'completed' : 'in_progress';
+
+    const { cvId } = await this.dataSource.transaction(async (manager) => {
+      const result = await this.cvService.confirmSection(deviceId, session.cvId, sectionId, content, nextSection === null, manager);
+
+      session.sections[sectionIndex] = { ...session.sections[sectionIndex], status: 'confirmed' };
+      session.currentSection = nextSection;
+      session.cvId = result.cvId;
+      session.status = sessionStatus;
+      await this.conversationRepository.saveSession(session, manager);
+
+      return result;
+    });
+
+    return {
+      section: sectionId,
+      status: 'confirmed',
+      nextSection,
+      sessionStatus,
+      cvId: sessionStatus === 'completed' ? cvId : null,
+    };
+  }
+
+  private resolveSectionContent(
+    sectionId: SectionId,
+    card: Record<string, unknown> | unknown[],
+    edits: Record<string, unknown> | unknown[] | null | undefined,
+  ): Record<string, unknown> | unknown[] {
+    if (edits === undefined || edits === null) {
+      return card;
+    }
+    const result = CARD_SCHEMA_BY_SECTION[sectionId].safeParse(edits);
+    if (!result.success) {
+      throw new AppError('INVALID_REQUEST', 'التعديلات اللي بعتها مش بالشكل الصحيح', { retryable: false });
+    }
+    return result.data as Record<string, unknown> | unknown[];
+  }
+
   private async getOwnedSession(sessionId: string, deviceId: string): Promise<ConversationSession> {
     const session = await this.conversationRepository.findById(sessionId);
     if (!session || session.deviceId !== deviceId) {
@@ -159,17 +240,13 @@ export class ConversationService {
     return session;
   }
 
-  /**
-   * Not wrapped in a DB transaction: session.cvId can't actually be set yet
-   * (nothing before the AI-powered confirm-section endpoint creates a Cv),
-   * so this is a single-statement operation in practice today. Revisit once
-   * that endpoint exists (see TODO.md).
-   */
   private async deleteSessionAndItsCv(session: ConversationSession): Promise<void> {
-    if (session.cvId) {
-      await this.cvService.deleteById(session.cvId);
-    }
-    await this.conversationRepository.deleteById(session.id);
+    await this.dataSource.transaction(async (manager) => {
+      if (session.cvId) {
+        await this.cvService.deleteById(session.cvId, manager);
+      }
+      await this.conversationRepository.deleteById(session.id, manager);
+    });
   }
 
   private toResponseDto(session: ConversationSession, messages: Message[]): ConversationResponseDto {
