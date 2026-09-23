@@ -1,0 +1,8 @@
+@baseUrl = http://localhost:3000/api/v1
+@deviceId = 3e6b6c8e-8b8b-4b8b-9b8b-8b8b8b8b8b8b
+
+### Health check
+GET {{baseUrl}}/health
+
+### Health check without X-Device-Id (should still work, no guard on this route)
+GET {{baseUrl}}/health

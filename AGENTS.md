@@ -114,8 +114,9 @@ These are what keep it scalable when jobs, applications, and notifications land 
 
 ## Working rules
 
+- **No tests for now.** Do NOT write unit tests, e2e tests, or test files, and do not set up a testing framework. If the Nest CLI generates `*.spec.ts` files, delete them. We'll add tests later — it's in `TODO.md`.
 - **One endpoint at a time.** Build it, test it with a real request, stop for review before the next one.
-- **Test before claiming it works.** Keep runnable requests in `requests.http` in the repo.
+- **Verify by calling the endpoint, not by writing tests.** Keep runnable requests in `requests.http` in the repo and run them before claiming anything works.
 - Run lint and typecheck before declaring any task done.
 - Never log CVs, audio, phone numbers, or emails.
 - Secrets in `.env` only, with `.env.example` kept current. Never commit a key.

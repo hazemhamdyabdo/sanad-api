@@ -1,21 +1,23 @@
 import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
+import { ConfigModule } from '@nestjs/config';
+import { APP_FILTER } from '@nestjs/core';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { appConfig, databaseConfig } from './config/configuration.js';
+import { validateEnv } from './config/env.schema.js';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
+import { DatabaseModule } from './database/database.module.js';
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'sanad-api',
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: validateEnv,
+      load: [appConfig, databaseConfig],
     }),
+    DatabaseModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}
