@@ -11,13 +11,18 @@ const basicCardSchema = z.object({
   location: text().nullable(),
 });
 
-const experienceCardSchema = z.object({
-  title: text(),
-  company: text(),
-  start: text(),
-  end: text().nullable(),
-  bullets: z.array(text()).min(1),
-});
+/** A user usually has more than one job — an array so a second (or third) entry doesn't get dropped. */
+const experienceCardSchema = z
+  .array(
+    z.object({
+      title: text(),
+      company: text(),
+      start: text(),
+      end: text().nullable(),
+      bullets: z.array(text()).min(1),
+    }),
+  )
+  .min(1);
 
 const projectsCardSchema = z.object({
   title: text(),
@@ -25,16 +30,26 @@ const projectsCardSchema = z.object({
   bullets: z.array(text()).min(1),
 });
 
-const educationCardSchema = z.object({
-  degree: text(),
-  school: text(),
-  year: text(),
-});
+/** A user usually has more than one degree/diploma — an array, same reasoning as experience. */
+const educationCardSchema = z
+  .array(
+    z.object({
+      degree: text(),
+      school: text(),
+      year: text(),
+    }),
+  )
+  .min(1);
 
-const certificateCardSchema = z.object({
-  name: text(),
-  date: text().nullable(),
-});
+/** A user usually has more than one certificate — an array, same reasoning as experience. */
+const certificatesCardSchema = z
+  .array(
+    z.object({
+      name: text(),
+      date: text().nullable(),
+    }),
+  )
+  .min(1);
 
 /** Unlike languages, a skill level is never "native". */
 const SKILL_LEVELS = LEVELS.filter((level) => level !== 'native') as Exclude<(typeof LEVELS)[number], 'native'>[];
@@ -64,7 +79,7 @@ export const CARD_SCHEMA_BY_SECTION: Record<SectionId, z.ZodType> = {
   experience: experienceCardSchema,
   projects: projectsCardSchema,
   education: educationCardSchema,
-  certificates: certificateCardSchema,
+  certificates: certificatesCardSchema,
   skills: skillsCardSchema,
   languages: languagesCardSchema,
 };

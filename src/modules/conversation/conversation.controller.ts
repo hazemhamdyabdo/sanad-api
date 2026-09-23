@@ -72,7 +72,7 @@ export class ConversationController {
     sse.send('user_message', toMessageResponseDto(userMessage));
 
     try {
-      const reply = await this.sectionReplyService.generate(session.currentSection ?? 'basic', history, dto.text);
+      const reply = await this.sectionReplyService.generate(section, history, dto.text);
 
       // Persisted before any SSE event about it goes out, for the same reason.
       const aiMessage = await this.conversationService.appendAiTextMessage(session, reply);
