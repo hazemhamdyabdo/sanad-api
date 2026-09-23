@@ -27,6 +27,7 @@ export class MistralProvider implements LlmProvider {
         temperature: options.temperature,
         max_tokens: options.maxTokens,
         stream: false,
+        response_format: options.jsonMode ? { type: 'json_object' } : undefined,
       }),
     });
 
@@ -48,6 +49,7 @@ export class MistralProvider implements LlmProvider {
         temperature: options.temperature,
         max_tokens: options.maxTokens,
         stream: true,
+        response_format: options.jsonMode ? { type: 'json_object' } : undefined,
       }),
     });
 

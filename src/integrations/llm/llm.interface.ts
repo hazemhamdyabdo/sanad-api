@@ -7,6 +7,8 @@ export interface LlmCompletionOptions {
   messages: LlmMessage[];
   temperature?: number;
   maxTokens?: number;
+  /** Ask the provider to enforce valid JSON output at the API level, when it can (e.g. Mistral/OpenAI's `response_format: json_object`). A provider that can't enforce this just ignores it — the caller must still validate the result either way. */
+  jsonMode?: boolean;
 }
 
 /**

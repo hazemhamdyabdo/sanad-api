@@ -5,6 +5,8 @@ import { LLM_PROVIDER, type LlmMessage, type LlmProvider } from '../../integrati
 import { buildSectionReplyPrompt } from '../prompts/section-reply.prompt.js';
 import { sectionReplySchema, type SectionReply } from '../schemas/section-reply.schema.js';
 
+const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص قبله أو بعده.';
+
 function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
   const start = trimmed.indexOf('{');
@@ -15,6 +17,22 @@ function extractJsonObject(raw: string): string {
   return trimmed.slice(start, end + 1);
 }
 
+const ARABIC_CHAR = '[\\u0600-\\u06FF]';
+const LATIN_CHAR = '[A-Za-z]';
+const ARABIC_THEN_LATIN = new RegExp(`(${ARABIC_CHAR})(${LATIN_CHAR})`, 'g');
+const LATIN_THEN_ARABIC = new RegExp(`(${LATIN_CHAR})(${ARABIC_CHAR})`, 'g');
+
+/**
+ * The model occasionally glues an English word directly onto an Arabic one
+ * with no space (e.g. "إيهTasks") — a generation glitch, not a prompt
+ * problem. Only `message` needs this; `card` content is meant to switch
+ * language by field (e.g. an English job title next to nothing), not
+ * mid-word, so it's never run over card data.
+ */
+function insertArabicLatinBoundarySpace(text: string): string {
+  return text.replace(ARABIC_THEN_LATIN, '$1 $2').replace(LATIN_THEN_ARABIC, '$1 $2');
+}
+
 @Injectable()
 export class SectionReplyService {
   private readonly logger = new Logger(SectionReplyService.name);
@@ -23,22 +41,44 @@ export class SectionReplyService {
 
   async generate(section: SectionId, history: LlmMessage[], userText: string): Promise<SectionReply> {
     const messages = buildSectionReplyPrompt(section, history, userText);
-    const raw = await this.llm.complete({ messages, temperature: 0.4 });
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(extractJsonObject(raw));
-    } catch {
-      this.logger.warn(`AI output was not valid JSON: ${raw}`);
+    const first = await this.complete(messages);
+    const parsed = this.tryParse(first);
+    if (parsed !== undefined) {
+      return this.validate(parsed);
+    }
+
+    // One retry with a short reminder, since losing the user's turn over a pure formatting slip is a bad experience.
+    this.logger.warn('AI output was not valid JSON — retrying once with a JSON-only reminder.');
+    const retryMessages: LlmMessage[] = [...messages, { role: 'assistant', content: first }, { role: 'user', content: JSON_ONLY_REMINDER }];
+    const retry = await this.complete(retryMessages);
+    const retryParsed = this.tryParse(retry, true);
+    if (retryParsed === undefined) {
       throw new AppError('AI_UNAVAILABLE', 'مش قادرين نفهم رد الذكاء الاصطناعي دلوقتي، جرب تاني', { retryable: true });
     }
 
+    return this.validate(retryParsed);
+  }
+
+  private complete(messages: LlmMessage[]): Promise<string> {
+    return this.llm.complete({ messages, temperature: 0.4, jsonMode: true });
+  }
+
+  private tryParse(raw: string, isRetry = false): unknown {
+    try {
+      return JSON.parse(extractJsonObject(raw));
+    } catch {
+      this.logger.warn(`AI output was not valid JSON${isRetry ? ' (after retry)' : ''}: ${raw}`);
+      return undefined;
+    }
+  }
+
+  private validate(parsed: unknown): SectionReply {
     const result = sectionReplySchema.safeParse(parsed);
     if (!result.success) {
       this.logger.warn(`AI output failed validation: ${JSON.stringify(result.error.issues)}`);
       throw new AppError('AI_UNAVAILABLE', 'رد الذكاء الاصطناعي مش بالشكل المتوقع، جرب تاني', { retryable: true });
     }
-
-    return result.data;
+    return { ...result.data, message: insertArabicLatinBoundarySpace(result.data.message) };
   }
 }

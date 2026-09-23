@@ -23,6 +23,10 @@ const ENTRY_REQUIREMENTS_BY_SECTION: Partial<Record<SectionId, string>> = {
 /** Sections where a user typically has more than one entry — the model must ask "another one?" before closing, not stop at the first. */
 const MULTI_ENTRY_SECTIONS: SectionId[] = ['experience', 'education', 'certificates'];
 
+/** Exact wording→value mapping so a level is translated, never upgraded (e.g. متقدم must stay "advanced", not become "expert"). */
+const LEVEL_MAPPING = '"مبتدئ"→beginner، "متوسط"→intermediate، "متقدم"→advanced، "خبير"→expert';
+const NATIVE_LEVEL_MAPPING = '، "اللغة الأم"/"لغتي الأم"→native';
+
 /**
  * `current_section: <id>` is plain ASCII on its own line deliberately — a
  * real model reads it as well as any other instruction, and it's what lets
@@ -47,7 +51,8 @@ export function buildSectionReplyPrompt(section: SectionId, history: LlmMessage[
 
       'أسلوب الكلام:',
       '- مصري عامي بسيط وودود، مش فصحى خالص.',
-      '- سؤال واحد بس في كل رسالة، وقصير.',
+      '- سؤال واحد بس في كل رسالة — علامة استفهام واحدة بالظبط. ممنوع تضيف جملة أو سؤال تاني بعده.',
+      '- ممنوع تشرح حاجة المستخدم مسألش عنها (زي معنى شهادة أو مصطلح)، وممنوع تقترح تكنولوجيا أو أداة أو حاجة المستخدم مقالهاش.',
       '- متكررش اللي المستخدم قاله للتو، كمل قدام في الحوار.',
       '- لو إجابته غامضة أو عامة، اسأل سؤال متابعة يجيبلك رقم أو تفصيلة محددة.',
       entryRequirements ? `- قبل ما تضيف أي entry في الـ array لازم تكون عارف: ${entryRequirements}.` : null,
@@ -57,10 +62,19 @@ export function buildSectionReplyPrompt(section: SectionId, history: LlmMessage[
       section === 'skills' || section === 'languages'
         ? '- المستخدم غالبًا هيقولك كذا حاجة في رد واحد (مثلاً كذا مهارة أو كذا لغة) — حطهم كلهم في الـ array، متسيبش ولا واحدة منهم.'
         : null,
+      section === 'skills'
+        ? `- ترجم مستوى المستخدم زي ما قاله بالظبط، من غير ما تزوده أو تقلله: ${LEVEL_MAPPING}. لو مقالش مستوى، اسأله — متخمنش.`
+        : null,
+      section === 'languages'
+        ? `- ترجم مستوى المستخدم زي ما قاله بالظبط، من غير ما تزوده أو تقلله: ${LEVEL_MAPPING}${NATIVE_LEVEL_MAPPING}. لو مقالش مستوى، اسأله — متخمنش.`
+        : null,
 
       'تقسيم اللغة:',
       '- "message": بالمصري العامي.',
       '- كل حاجة جوه "card": إنجليزي احترافي مناسب لسيرة ذاتية ATS. أي bullet points تبدأ بفعل قوي (Action verb)، وحطّ أرقام بس لو المستخدم قالها هو بالظبط.',
+      section === 'basic'
+        ? '- كل حقول الـ card إنجليزي زي باقي الأقسام، ما عدا "name": سيبه زي ما المستخدم قاله، ولو كتبه عربي حوّله لحروف إنجليزية (transliteration) زي "Mohamed Ahmed" مش "محمد أحمد". "title" و"location" لازم يترجموا للإنجليزي حتى لو المستخدم قالهم عربي، مثلاً "Software Engineer"، "Nasr City, Cairo".'
+        : null,
 
       'رد بكائن JSON صحيح بس، من غير أي نص قبله أو بعده، بالشكل ده بالظبط:',
       `{"message": string, "section": "${section}", "sectionDone": boolean, "card": ${CARD_SHAPE_BY_SECTION[section]}|null}`,
