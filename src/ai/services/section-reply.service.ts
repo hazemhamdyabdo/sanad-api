@@ -79,6 +79,16 @@ export class SectionReplyService {
       this.logger.warn(`AI output failed validation: ${JSON.stringify(result.error.issues)}`);
       throw new AppError('AI_UNAVAILABLE', 'رد الذكاء الاصطناعي مش بالشكل المتوقع، جرب تاني', { retryable: true });
     }
-    return { ...result.data, message: insertArabicLatinBoundarySpace(result.data.message) };
+
+    const data = result.data;
+    const message = insertArabicLatinBoundarySpace(data.message);
+
+    // A card only ever means anything once sectionDone is true — nothing renders or persists it otherwise, so a stray one is dropped rather than failing the whole reply.
+    if (!data.sectionDone && data.card !== null) {
+      this.logger.warn(`AI sent a card while sectionDone was false (section: ${data.section}) — dropping it.`);
+      return { ...data, message, card: null };
+    }
+
+    return { ...data, message };
   }
 }

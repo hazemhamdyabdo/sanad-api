@@ -105,17 +105,16 @@ const sectionReplyUnion = z.discriminatedUnion('section', [
 ]);
 
 /**
- * `sectionDone` and `card` must agree: no card while still collecting
- * answers, and never a `sectionDone: true` with nothing to show for it —
- * this is what actually enforces "never a half-built card" at the schema
- * level, on top of each section's own required fields above.
+ * A `card` is only ever meaningful when `sectionDone` is true — nothing
+ * renders or persists it otherwise. A card sent alongside `sectionDone:
+ * false` is dropped by SectionReplyService, not rejected here: failing the
+ * whole reply (and costing the user their turn) over a field nobody reads
+ * isn't worth it. What's actually fatal is a `sectionDone: true` with
+ * nothing to show for it.
  */
 export const sectionReplySchema = sectionReplyUnion.superRefine((data, ctx) => {
   if (data.sectionDone && data.card === null) {
     ctx.addIssue({ code: 'custom', message: 'card is required when sectionDone is true', path: ['card'] });
-  }
-  if (!data.sectionDone && data.card !== null) {
-    ctx.addIssue({ code: 'custom', message: 'card must be null when sectionDone is false', path: ['card'] });
   }
 });
 

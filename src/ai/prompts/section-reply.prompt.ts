@@ -14,9 +14,9 @@ const CARD_SHAPE_BY_SECTION: Record<SectionId, string> = {
 
 /** What the model must know about ONE entry before writing it — the "no invented details" rule applies per entry, not per section. */
 const ENTRY_REQUIREMENTS_BY_SECTION: Partial<Record<SectionId, string>> = {
-  experience: 'اسم الشركة، تاريخ البداية والنهاية (أو إنه لسه شغال هناك)، وهو عمل إيه هناك بالظبط',
-  projects: 'اسم المشروع، وهو عمل فيه إيه بالظبط',
-  education: 'اسم المؤهل/الدرجة، اسم المدرسة أو الجامعة، وسنة التخرج',
+  experience: 'اسم الشركة، تاريخ البداية والنهاية (أو لسه شغال)، وعمل إيه بالظبط',
+  projects: 'اسم المشروع، وعمل فيه إيه بالظبط',
+  education: 'اسم المؤهل، اسم المدرسة/الجامعة، وسنة التخرج',
   certificates: 'اسم الشهادة (والتاريخ لو عارفه)',
 };
 
@@ -25,7 +25,43 @@ const MULTI_ENTRY_SECTIONS: SectionId[] = ['experience', 'education', 'certifica
 
 /** Exact wording→value mapping so a level is translated, never upgraded (e.g. متقدم must stay "advanced", not become "expert"). */
 const LEVEL_MAPPING = '"مبتدئ"→beginner، "متوسط"→intermediate، "متقدم"→advanced، "خبير"→expert';
-const NATIVE_LEVEL_MAPPING = '، "اللغة الأم"/"لغتي الأم"→native';
+const NATIVE_LEVEL_MAPPING = '، "اللغة الأم"→native';
+
+/**
+ * Per-section instructions, injected only for the CURRENT section — a
+ * previous version repeated every section's rules on every turn regardless
+ * of relevance, and the model started losing coherence under that much
+ * accumulated instruction. Keep this list short; if a section needs no
+ * extra rule, it gets none.
+ */
+function sectionSpecificRules(section: SectionId): string[] {
+  const rules: string[] = [];
+
+  const entryRequirements = ENTRY_REQUIREMENTS_BY_SECTION[section];
+  if (entryRequirements) {
+    rules.push(`- قبل ما تضيف أي entry، لازم تكون عارف: ${entryRequirements}.`);
+  }
+
+  if (MULTI_ENTRY_SECTIONS.includes(section)) {
+    rules.push(
+      '- بعد كل entry كامل، اسأل لو في واحد تاني قبل sectionDone: true. اقفل بس لما يقول صراحة مفيش حاجة تانية، وحط كل العناصر في الـ array مرة واحدة.',
+    );
+  }
+
+  if (section === 'skills' || section === 'languages') {
+    const mapping = section === 'languages' ? LEVEL_MAPPING + NATIVE_LEVEL_MAPPING : LEVEL_MAPPING;
+    rules.push(`- المستخدم هيقول كذا حاجة في رد واحد — حطهم كلهم في الـ array. ترجم المستوى زي ما قاله بالظبط، من غير تعديل: ${mapping}. لو مقالش مستوى، اسأله.`);
+  }
+
+  if (section === 'basic') {
+    rules.push(
+      '- في "card" بس: كل الحقول إنجليزي، ما عدا "name" لو عربي حوّله لحروف إنجليزية (محمد أحمد → Mohamed Ahmed). "title" و"location" إنجليزي حتى لو المستخدم قالهم عربي.',
+      '- في "message": نادي عليه باسمه زي ما قاله بالظبط وبالعربي (يا محمد مش يا Mohamed). التحويل للإنجليزي في الـ card بس.',
+    );
+  }
+
+  return rules;
+}
 
 /**
  * `current_section: <id>` is plain ASCII on its own line deliberately — a
@@ -34,58 +70,29 @@ const NATIVE_LEVEL_MAPPING = '، "اللغة الأم"/"لغتي الأم"→nat
  * which section it's replying about.
  */
 export function buildSectionReplyPrompt(section: SectionId, history: LlmMessage[], userText: string): LlmMessage[] {
-  const entryRequirements = ENTRY_REQUIREMENTS_BY_SECTION[section];
-  const isMultiEntry = MULTI_ENTRY_SECTIONS.includes(section);
-
   const system: LlmMessage = {
     role: 'system',
     content: [
-      'انت مساعد مصري بيساعد حد يبني سيرة ذاتية (CV) بمحادثة قصيرة وودية باللهجة المصرية العامية.',
+      'انت مساعد مصري بيساعد حد يبني سيرة ذاتية (CV) بمحادثة قصيرة وودية.',
       `current_section: ${section}`,
-      `القسم ده معناه: ${SECTION_LABELS[section]}.`,
+      `معناه: ${SECTION_LABELS[section]}.`,
 
-      'قواعد صارمة، ممنوع تخالفها:',
-      '- متخترعش ولا تفترض أي معلومة: مفيش أرقام أو نسب أو تواريخ أو أسماء أماكن أو إنجازات المستخدم مقالهاش.',
-      '- ممنوع تستخدم أي placeholder زي [اسم المحل] أو MM/YYYY. لو حاجة ناقصة، اسأل عنها واستنى الرد — ومتكتبش الـ entry لسه.',
-      '- لو المستخدم قال مش فاكر أو رفض يجاوب، اكتب العنصر من غير التفصيلة دي، من غير أقواس فاضية أو نص بديل.',
+      'قواعد أساسية:',
+      '- متخترعش أرقام أو تواريخ أو أماكن أو حاجة المستخدم مقالهاش. مفيش placeholders — لو حاجة ناقصة اسأل عنها.',
+      '- لو رفض يجاوب أو قال "مش فاكر"، سيب التفصيلة فاضية (null)، من غير نص بديل.',
+      '- مصري عامي حقيقي بس ("عايز" مش "تبغى")، مش فصحى خالص.',
+      '- كل حاجة جوه "card" إنجليزي احترافي مناسب لـ ATS، والـ bullets تبدأ بفعل قوي.',
 
-      'أسلوب الكلام:',
-      '- مصري عامي بسيط وودود، مش فصحى خالص.',
-      '- سؤال واحد بس في كل رسالة — علامة استفهام واحدة بالظبط. ممنوع تضيف جملة أو سؤال تاني بعده.',
-      '- ممنوع تشرح حاجة المستخدم مسألش عنها (زي معنى شهادة أو مصطلح)، وممنوع تقترح تكنولوجيا أو أداة أو حاجة المستخدم مقالهاش.',
-      '- متكررش اللي المستخدم قاله للتو، كمل قدام في الحوار.',
-      '- لو إجابته غامضة أو عامة، اسأل سؤال متابعة يجيبلك رقم أو تفصيلة محددة.',
-      entryRequirements ? `- قبل ما تضيف أي entry في الـ array لازم تكون عارف: ${entryRequirements}.` : null,
-      isMultiEntry
-        ? '- بعد ما تخلص تفاصيل عنصر واحد كامل، اسأل المستخدم لو في عنصر تاني يضيفه قبل ما تحط sectionDone: true. خلي sectionDone: true بس لما يقول صراحة إنه مفيش حاجة تانية، وحط وقتها كل العناصر اللي جمعتها في الـ array مرة واحدة.'
-        : null,
-      section === 'skills' || section === 'languages'
-        ? '- المستخدم غالبًا هيقولك كذا حاجة في رد واحد (مثلاً كذا مهارة أو كذا لغة) — حطهم كلهم في الـ array، متسيبش ولا واحدة منهم.'
-        : null,
-      section === 'skills'
-        ? `- ترجم مستوى المستخدم زي ما قاله بالظبط، من غير ما تزوده أو تقلله: ${LEVEL_MAPPING}. لو مقالش مستوى، اسأله — متخمنش.`
-        : null,
-      section === 'languages'
-        ? `- ترجم مستوى المستخدم زي ما قاله بالظبط، من غير ما تزوده أو تقلله: ${LEVEL_MAPPING}${NATIVE_LEVEL_MAPPING}. لو مقالش مستوى، اسأله — متخمنش.`
-        : null,
+      ...sectionSpecificRules(section),
 
-      'تقسيم اللغة:',
-      '- "message": بالمصري العامي.',
-      '- كل حاجة جوه "card": إنجليزي احترافي مناسب لسيرة ذاتية ATS. أي bullet points تبدأ بفعل قوي (Action verb)، وحطّ أرقام بس لو المستخدم قالها هو بالظبط.',
-      section === 'basic'
-        ? '- كل حقول الـ card إنجليزي زي باقي الأقسام، ما عدا "name": سيبه زي ما المستخدم قاله، ولو كتبه عربي حوّله لحروف إنجليزية (transliteration) زي "Mohamed Ahmed" مش "محمد أحمد". "title" و"location" لازم يترجموا للإنجليزي حتى لو المستخدم قالهم عربي، مثلاً "Software Engineer"، "Nasr City, Cairo".'
-        : null,
+      'أهم حاجتين، مايتخالفوش:',
+      '- سؤال واحد بس، علامة استفهام واحدة بالظبط. من غير أي جملة أو سؤال إضافي بعده.',
+      '- ممنوع تشرح تعريف حاجة أو تقترح تكنولوجيا/مكان/مثال المستخدم مقالوش.',
 
-      'رد بكائن JSON صحيح بس، من غير أي نص قبله أو بعده، بالشكل ده بالظبط:',
+      'رد بكائن JSON بس، من غير أي نص قبله أو بعده:',
       `{"message": string, "section": "${section}", "sectionDone": boolean, "card": ${CARD_SHAPE_BY_SECTION[section]}|null}`,
-      '"message": ردك على اليوزر بالمصري.',
-      isMultiEntry
-        ? '"sectionDone": true بس لما المستخدم يأكد إنه مفيش عنصر تاني يضيفه، وإلا false.'
-        : '"sectionDone": true لو عندك كل البيانات المطلوبة للقسم ده من غير أي حاجة ناقصة أو مخترعة، وإلا false.',
-      `"card": لازم يكون بالظبط ${CARD_SHAPE_BY_SECTION[section]} لو sectionDone كان true، وnull لو false.`,
-    ]
-      .filter((line): line is string => line !== null)
-      .join('\n'),
+      '"sectionDone": true لو البيانات كاملة من غير نقص أو اختراع، وإلا false. "card" لازم يكون null لو false.',
+    ].join('\n'),
   };
 
   return [system, ...history, { role: 'user', content: userText }];

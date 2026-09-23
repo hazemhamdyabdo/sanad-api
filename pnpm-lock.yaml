@@ -9,16 +9,16 @@ importers:
   .:
     dependencies:
       '@nestjs/common':
-        specifier: ^12.0.1
+        specifier: ^12.1.0
         version: 12.1.0(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/config':
         specifier: ^12.0.1
         version: 12.0.1(@nestjs/common@12.1.0(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@nestjs/core':
-        specifier: ^12.0.1
+        specifier: ^12.1.0
         version: 12.1.0(@nestjs/common@12.1.0(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.1.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
-        specifier: ^12.0.1
+        specifier: ^12.1.0
         version: 12.1.0(@nestjs/common@12.1.0(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.1.0)
       '@nestjs/typeorm':
         specifier: ^12.0.1
@@ -36,7 +36,7 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
       rxjs:
-        specifier: ^7.8.1
+        specifier: ^7.8.2
         version: 7.8.2
       typeorm:
         specifier: ^1.1.1
@@ -46,58 +46,58 @@ importers:
         version: 4.6.5
     devDependencies:
       '@nestjs/cli':
-        specifier: ^12.0.0
+        specifier: ^12.0.5
         version: 12.0.5(@types/node@24.13.6)(prettier@3.9.9)
       '@nestjs/mau':
-        specifier: ^0.2.6
+        specifier: ^0.2.8
         version: 0.2.8
       '@nestjs/schematics':
-        specifier: ^12.0.0
+        specifier: ^12.0.5
         version: 12.0.5(chokidar@5.0.0)(prettier@3.9.9)(typescript@6.0.3)
       '@nestjs/testing':
-        specifier: ^12.0.1
+        specifier: ^12.1.0
         version: 12.1.0(@nestjs/common@12.1.0(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.1.0)(@nestjs/platform-express@12.1.0)
       '@types/express':
-        specifier: ^5.0.0
+        specifier: ^5.0.6
         version: 5.0.6
       '@types/node':
-        specifier: ^24.0.0
+        specifier: ^24.13.6
         version: 24.13.6
       '@types/supertest':
-        specifier: ^7.0.0
+        specifier: ^7.2.1
         version: 7.2.1
       '@vitest/coverage-v8':
-        specifier: ^4.1.2
+        specifier: ^4.1.11
         version: 4.1.11(vitest@4.1.11)
       dotenv:
         specifier: ^18.0.3
         version: 18.0.3
       oxlint:
-        specifier: ^1.58.0
+        specifier: ^1.85.0
         version: 1.85.0(oxlint-tsgolint@7.0.2002)
       oxlint-tsgolint:
-        specifier: ^7.0.2001
+        specifier: ^7.0.2002
         version: 7.0.2002
       prettier:
-        specifier: ^3.4.2
+        specifier: ^3.9.9
         version: 3.9.9
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21
       supertest:
-        specifier: ^7.0.0
+        specifier: ^7.3.0
         version: 7.3.0
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
       typescript:
-        specifier: ^6.0.2
+        specifier: ^6.0.3
         version: 6.0.3
       vite-tsconfig-paths:
         specifier: ^5.1.4
         version: 5.1.4(typescript@6.0.3)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(tsx@4.23.15))
       vitest:
-        specifier: ^4.1.2
+        specifier: ^4.1.11
         version: 4.1.11(@types/node@24.13.6)(@vitest/coverage-v8@4.1.11)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(tsx@4.23.15))
 
 packages:
