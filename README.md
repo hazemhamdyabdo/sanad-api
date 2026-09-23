@@ -2,117 +2,72 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+# sanad-api
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+NestJS backend for Sanad (سَنَد). See [`AGENTS.md`](./AGENTS.md) for architecture and working rules, and [`API-CONTRACT.md`](./API-CONTRACT.md) for the endpoint contract shared with the client app.
 
-## Description
+## Local dev setup: Windows host + WSL2 Docker + phone on LAN
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+This is the supported dev setup for this repo: **Postgres and pgAdmin run in Docker inside WSL2** (Docker Engine only — no Docker Desktop needed), and **the api runs directly on the Windows host** via `pnpm run start:dev`. Running the api on the host (not in a container) is what lets your phone reach it on your machine's real LAN IP, the same way it reaches the Expo dev server.
 
-## Project setup
+Prerequisites:
+
+- WSL2 with a distro that has Docker Engine + the Compose plugin installed and running (`docker compose version` should work from inside it). No Docker Desktop.
+- Node + pnpm on Windows.
+- If you're also running the app: `sanad-client` cloned as a sibling directory of this repo (`../sanad-client`), and its usual Expo/mobile prerequisites.
+
+### Windows ⇄ WSL2 networking, and why the defaults work
+
+- **API on Windows → Postgres in WSL2**: Docker's published ports inside WSL2 are reachable from Windows via `localhost` — this is WSL2's built-in localhost forwarding (works in both NAT and mirrored networking modes). That's why `.env.example` defaults `DATABASE_HOST=localhost`. If that ever doesn't work on your machine (forwarding disabled, unusual `.wslconfig`), the fallback is your WSL2 VM's own IP: run `wsl hostname -I` and use that instead of `localhost`.
+- **Phone → API on Windows**: since the api runs on the host, this is just normal Windows networking — the phone needs your machine's real Wi-Fi/Ethernet LAN IP (see below), not `localhost` and not anything WSL-related.
+- **pnpm scripts from a Windows terminal**: there's no `docker` on the Windows PATH in this setup (Docker only exists inside WSL2). The `docker`-related scripts detect this (`process.platform === 'win32'`) and transparently proxy through `wsl.exe` instead, so `pnpm run dev` etc. work the same whether you run them from PowerShell/cmd or from a WSL shell. If you have more than one WSL distribution, set `WSL_DISTRO` in `.env` to the one running Docker; otherwise your WSL default is used.
+
+### Running it from zero
 
 ```bash
-$ pnpm install
+cp .env.example .env   # adjust ports/passwords if the defaults clash with anything already running
+pnpm install
+pnpm run dev            # postgres + pgadmin in WSL2 Docker, then the api on this host (foreground)
 ```
 
-## Compile and run the project
+- API: `http://localhost:${PORT}/api/v1` (health check: `GET /api/v1/health`)
+- pgAdmin: `http://localhost:${PGADMIN_PORT}` — log in with `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` from `.env`. A "Sanad (docker)" server is pre-configured (host/port/user/db already filled in); its password is your `DATABASE_PASSWORD`.
+
+To also start the mobile app: run `pnpm run dev:app` in a second terminal. It prints the API base URL for all three run targets:
+
+| Running on         | API base URL                            |
+| ------------------- | ---------------------------------------- |
+| Physical device      | your machine's real LAN IP (printed by `pnpm run lan-ip`) |
+| Android emulator     | `http://10.0.2.2:<PORT>/api/v1`          |
+| iOS simulator        | `http://localhost:<PORT>/api/v1`         |
+
+**Verifying the phone can actually reach the API:** run `pnpm run lan-ip` and check the address it prints is your real Wi-Fi/Ethernet adapter, not a VPN, mobile-hotspot, or WSL virtual adapter (it filters those out by name, but double-check if in doubt — e.g. `ipconfig` on Windows and match against whichever network your phone is on). Then, with the api running, open that printed URL + `/api/v1/health` in the phone's browser — you should see `{"status":"ok",...}`. If it times out: check Windows Defender Firewall hasn't blocked Node.js on the "Private" network profile (it usually prompts the first time `pnpm run dev` binds the port — allow it), and confirm the phone is on the same Wi-Fi network as the PC.
+
+Other scripts:
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+pnpm run dev:api       # backend only: postgres + pgadmin in docker, api on the host (same as `dev`, no Expo)
+pnpm run down          # stop the docker db services
+pnpm run down:clean    # stop and wipe the postgres volume (asks for confirmation)
+pnpm run logs          # follow postgres/pgadmin container logs
+pnpm run db:migrate    # run pending migrations (runs on the host, straight against WSL2's postgres)
+pnpm run db:revert     # revert the last migration
+pnpm run db:reset      # drop + recreate the schema, then re-run migrations (asks for confirmation)
+pnpm run db:seed       # run the seed script (no seed data defined yet)
+pnpm run db:shell      # psql into the postgres container (via WSL2)
 ```
 
-## Run tests
+`docker-compose.yml` is the base stack and includes an `api` service — that's the shape a future production-style deploy would build on (a built image, no source mount), but it's **not** part of the day-to-day dev flow above; the api always runs on the host in dev. `docker-compose.dev.yml` only adds pgAdmin on top of the base `postgres`.
+
+## Tests, lint, build
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+pnpm run test        # unit tests
+pnpm run lint         # oxlint
+pnpm run build        # nest build
 ```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-This project is already instrumented. Create a free account at [observe.nestjs.com](https://observe.nestjs.com), add an application, and paste the generated app key and secret into the `ObserveModule.forRoot()` call in `src/app.module.ts`.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
 
 ## Resources
 
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- [NestJS Documentation](https://docs.nestjs.com)
+- [TypeORM Documentation](https://typeorm.io)

@@ -1,0 +1,41 @@
+name: sanad-api
+
+# Base stack. In day-to-day dev only `postgres` (and, via
+# docker-compose.dev.yml, pgadmin) actually get started — the api runs on
+# the host instead (see README). The `api` service here is kept for a
+# future production-style deploy; if it's ever brought up for real, give it
+# its own env with DATABASE_HOST=postgres — the default in .env (localhost)
+# is for the host-run dev workflow, not container-to-container networking.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    ports:
+      - '${DATABASE_PORT}:5432'
+    volumes:
+      - sanad-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - '${PORT}:${PORT}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  sanad-postgres-data:

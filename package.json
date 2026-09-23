@@ -1,6 +1,7 @@
 {
   "name": "sanad-api",
   "version": "0.0.1",
+  "packageManager": "pnpm@10.11.1",
   "description": "",
   "author": "",
   "private": true,
@@ -23,7 +24,20 @@
     "migration:generate": "tsx ./node_modules/typeorm/cli.js migration:generate -d src/database/data-source.ts",
     "migration:create": "tsx ./node_modules/typeorm/cli.js migration:create",
     "migration:run": "tsx ./node_modules/typeorm/cli.js migration:run -d src/database/data-source.ts",
-    "migration:revert": "tsx ./node_modules/typeorm/cli.js migration:revert -d src/database/data-source.ts"
+    "migration:revert": "tsx ./node_modules/typeorm/cli.js migration:revert -d src/database/data-source.ts",
+    "seed": "tsx src/database/seed.ts",
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "node scripts/dev-api.mjs",
+    "dev:app": "node scripts/dev-app.mjs",
+    "down": "node scripts/compose.mjs down",
+    "down:clean": "node scripts/down-clean.mjs",
+    "logs": "node scripts/compose.mjs logs -f",
+    "db:migrate": "pnpm run migration:run",
+    "db:revert": "pnpm run migration:revert",
+    "db:reset": "node scripts/db-reset.mjs",
+    "db:seed": "pnpm run seed",
+    "db:shell": "node scripts/db-shell.mjs",
+    "lan-ip": "node scripts/lan-ip.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
