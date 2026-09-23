@@ -12,7 +12,7 @@ The Expo mobile app lives in a separate repo (`sanad-client`). This repo is back
 
 Device registration, conversation (SSE), CV built section by section, CV upload and parsing, CV read/update, PDF export.
 
-**Not in scope yet** (see `TODO.md`): jobs, matching, applying, tailoring the CV per job, n8n, LangGraph, auth, notifications.
+**Not in scope yet** (see `TODO.md`): jobs, matching, applying, tailoring the CV per job, pgvector, n8n, LangGraph, auth, notifications.
 
 ## Key decisions
 
@@ -21,18 +21,27 @@ Device registration, conversation (SSE), CV built section by section, CV upload 
 - **Replies stream over SSE.** Text streams token by token; structured cards are sent as one complete event.
 - **The CV is built section by section.** Each section is confirmed by the user, then saved. The backend tells the client which sections are still missing; the last one carries a final flag.
 - **Resumable.** A returning device gets back where it stopped, and can either continue or wipe and start over.
-- **AI behind an interface.** Providers (LLM, speech-to-text) are chosen later; the code depends on an interface, never on a vendor SDK, so swapping is a one-file change.
+- **AI behind an interface.** Providers (LLM, speech-to-text) are chosen later; code depends on an interface, never on a vendor SDK, so swapping is a one-file change.
 - **Fail visibly, in Arabic.** Every error goes through the shared error shape with an Egyptian Arabic `message`, because the app shows it to the user as is.
 
 ## Stack
 
 - NestJS + TypeScript (strict)
-- PostgreSQL + a typed ORM (Prisma)
+- PostgreSQL + **TypeORM** (`@nestjs/typeorm`)
 - `class-validator` / `class-transformer` for request DTOs
 - `zod` to validate anything coming back from an LLM before trusting it
 - HTML → PDF renderer producing real text, never an image
 
 Ask before adding any other dependency.
+
+### TypeORM rules
+
+- **`synchronize: false` always**, in every environment. Schema changes happen only through migrations, committed to the repo.
+- Entities live in their own module under `entities/`. One entity per file.
+- Only a module's repository touches TypeORM, and only for its own entities. No `getRepository` calls in services or controllers.
+- Query builder results and raw queries must be mapped to an explicit typed DTO — never returned as `any`.
+- Use transactions where more than one table changes together (e.g. confirming a section writes both the CV section and the session state).
+- Never enable eager relations globally; load what you need explicitly.
 
 ## Structure
 
@@ -52,7 +61,9 @@ src/
 │   ├── sse/                    # SSE helpers (event shapes, heartbeats)
 │   └── types/
 │
-├── database/                   # ORM client module, migrations, seeds
+├── database/                   # TypeORM module, data source, migrations
+│   ├── migrations/
+│   └── data-source.ts
 │
 ├── integrations/               # everything talking to the outside world
 │   ├── llm/
@@ -82,9 +93,9 @@ modules/<name>/
 ├── <name>.module.ts
 ├── <name>.controller.ts        # thin: validate → service → DTO
 ├── <name>.service.ts           # business logic
-├── <name>.repository.ts        # the only place touching the ORM for this module
+├── <name>.repository.ts        # the only place touching TypeORM for this module
+├── entities/                   # TypeORM entities owned by this module
 ├── dto/                        # request DTOs + response DTOs shaped by the contract
-├── entities/ or types.ts
 └── index.ts                    # the module's public API
 ```
 
@@ -92,12 +103,11 @@ modules/<name>/
 
 These are what keep it scalable when jobs, applications, and notifications land later:
 
-- **A module is reached only through its `index.ts`** — never import another module's service, repository, or internals directly.
+- **A module is reached only through its `index.ts`** — never import another module's service, repository, or entities directly.
 - **Only `ai/` builds prompts, only `integrations/` calls the outside world.** A business module asks for a typed result and never sees a vendor SDK, an HTTP client, or a raw model response.
-- **Every AI output is validated with zod before use.** Never trust it, never pass it straight through to the client.
+- **Every AI output is validated with zod before use.** Never trust it, never pass it straight to the client.
 - **Controllers are thin.** No business logic, no ORM, no prompt building.
-- **Only a module's repository touches the ORM**, and only for its own tables.
-- **Response DTOs are written from the contract**, not from database models. Never leak an entity to the client.
+- **Response DTOs are written from the contract**, not from entities. Never leak an entity to the client.
 - **Nothing vendor-specific in business code.** If a class name contains a vendor's name outside `integrations/`, it's in the wrong place.
 - **New capability = new module**, same shape as the others. Do not grow an existing module sideways.
 - API is versioned under `/api/v1`. Breaking a response shape means a new version, not an edit.
