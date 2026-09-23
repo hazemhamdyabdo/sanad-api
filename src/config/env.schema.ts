@@ -15,12 +15,21 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
+
+  LLM_PROVIDER: z.enum(['mistral', 'fake']).default('fake'),
+  AI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default('mistral-small-latest'),
+});
+
+const envSchemaWithCrossFieldRules = envSchema.refine((env) => env.LLM_PROVIDER !== 'mistral' || !!env.AI_API_KEY, {
+  message: 'AI_API_KEY is required when LLM_PROVIDER=mistral',
+  path: ['AI_API_KEY'],
 });
 
 export type Env = z.infer<typeof envSchema>;
 
 export function validateEnv(config: Record<string, unknown>): Env {
-  const result = envSchema.safeParse(config);
+  const result = envSchemaWithCrossFieldRules.safeParse(config);
 
   if (!result.success) {
     const issues = result.error.issues

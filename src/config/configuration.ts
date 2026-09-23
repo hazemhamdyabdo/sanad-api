@@ -14,3 +14,9 @@ export const databaseConfig = registerAs('database', () => ({
   database: process.env.DATABASE_NAME,
   ssl: process.env.DATABASE_SSL === 'true',
 }));
+
+export const aiConfig = registerAs('ai', () => ({
+  llmProvider: process.env.LLM_PROVIDER as Env['LLM_PROVIDER'],
+  apiKey: process.env.AI_API_KEY,
+  model: process.env.AI_MODEL,
+}));
