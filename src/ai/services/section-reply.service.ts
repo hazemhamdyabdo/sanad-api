@@ -50,6 +50,23 @@ const MAX_ASSISTANT_TURNS_BEFORE_FORCED_CLOSE = 4;
 const NEUTRAL_CLOSING_MESSAGE = 'تمام، خلصنا القسم ده.';
 
 /**
+ * Whether `basic` can close without an email or a location is decided in code, not left to the
+ * model's own judgment every turn — the same reasoning as the closing-intent/hard-cap logic above.
+ * A missing field is only accepted once the model has already asked about it this many times
+ * (detected by scanning its own prior messages for the relevant keyword) — matching "closes without
+ * it only after the user has been asked and declined twice", not on the first pass.
+ */
+const REQUIRED_BASIC_FIELD_ASK_LIMIT = 2;
+const EMAIL_MENTION = /إيميل|ايميل|email/i;
+const LOCATION_MENTION = /مدينة|location/i;
+const ASK_EMAIL_MESSAGE = 'طب ممكن آخد إيميلك كمان؟';
+const ASK_LOCATION_MESSAGE = 'وإنت عايش في أي مدينة بالظبط؟';
+
+function countAssistantMentions(history: LlmMessage[], pattern: RegExp): number {
+  return history.filter((entry) => entry.role === 'assistant' && pattern.test(entry.content)).length;
+}
+
+/**
  * A section forced closed by the hard cap or a closing-intent match still has to drop any
  * trailing question — showing a card next to an unanswerable question is exactly the confusing
  * state the section_card + still-asking bug produced. Sentences are split on `.`/`!` (the shape
@@ -226,6 +243,22 @@ export class SectionReplyService {
         // very likely the model dropping entries, not the user retracting them — keep the larger one.
         this.logger.warn(`New extraction (${card.length} entries) is smaller than a prior one (${previousBestCard.length}) for section ${section} — keeping the larger one.`);
         card = previousBestCard;
+      } else if (section === 'basic' && card && !Array.isArray(card) && !hardCapped) {
+        const basic = card as Record<string, unknown>;
+        const emailAsks = countAssistantMentions(history, EMAIL_MENTION);
+        const locationAsks = countAssistantMentions(history, LOCATION_MENTION);
+
+        if (!basic.email && emailAsks < REQUIRED_BASIC_FIELD_ASK_LIMIT) {
+          this.logger.warn(`Basic section would close without an email after only ${emailAsks} prior ask(s) — forcing one more turn.`);
+          sectionDone = false;
+          card = null;
+          finalMessage = ASK_EMAIL_MESSAGE;
+        } else if (!basic.location && locationAsks < REQUIRED_BASIC_FIELD_ASK_LIMIT) {
+          this.logger.warn(`Basic section would close without a location after only ${locationAsks} prior ask(s) — forcing one more turn.`);
+          sectionDone = false;
+          card = null;
+          finalMessage = ASK_LOCATION_MESSAGE;
+        }
       }
     }
 
