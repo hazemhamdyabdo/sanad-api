@@ -89,7 +89,10 @@ export class ConversationController {
 
       sse.send('message_end', { id: aiMessage.id, text: aiMessage.text, quickReplies: null });
 
-      if (reply.sectionDone && reply.card) {
+      if (reply.section === 'experience' && reply.hasNoExperience) {
+        // No card to confirm here — the section itself is replaced, per the contract's own note that `projects` stands in for `experience` when the user hasn't worked before.
+        await this.conversationService.switchExperienceToProjects(session);
+      } else if (reply.sectionDone && reply.card) {
         const cardMessage = await this.conversationService.appendSectionCardMessage(session, reply);
         sse.send('section_card', {
           id: cardMessage.id,

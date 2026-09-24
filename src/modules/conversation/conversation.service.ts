@@ -157,6 +157,23 @@ export class ConversationService {
     });
   }
 
+  /**
+   * A user who's never worked before has nothing for `experience` — the
+   * contract itself says `projects` takes its place in that case. Swaps the
+   * `experience` entry in the session's own section list for `projects` at
+   * the same position and moves `currentSection` there. No CV/transaction
+   * involved: there's no card to confirm for a section that's being skipped.
+   */
+  async switchExperienceToProjects(session: ConversationSession): Promise<void> {
+    const index = session.sections.findIndex((section) => section.id === 'experience');
+    if (index === -1) {
+      return;
+    }
+    session.sections[index] = { id: 'projects', label: SECTION_LABELS.projects, status: 'pending' };
+    session.currentSection = 'projects';
+    await this.conversationRepository.saveSession(session);
+  }
+
   isLastSection(session: ConversationSession, sectionId: SectionId): boolean {
     const index = session.sections.findIndex((section) => section.id === sectionId);
     return index !== -1 && index === session.sections.length - 1;

@@ -60,6 +60,12 @@ function sectionSpecificRules(section: SectionId): string[] {
     );
   }
 
+  if (section === 'experience') {
+    rules.push(
+      '- لو المستخدم قال إنه مشتغلش قبل كده (مشتغلتش، لا معنديش خبرة، لسه متخرج، دي أول شغلانة)، حط "hasNoExperience": true و"sectionDone": true و"card": null، وقوله في "message" إنكم هتتكلموا عن مشاريعه أو تدريبه أو أنشطة تطوعية بدل كده.',
+    );
+  }
+
   return rules;
 }
 
@@ -81,6 +87,7 @@ export function buildSectionReplyPrompt(section: SectionId, history: LlmMessage[
       '- متخترعش أرقام أو تواريخ أو أماكن أو حاجة المستخدم مقالهاش. مفيش placeholders — لو حاجة ناقصة اسأل عنها.',
       '- لو رفض يجاوب أو قال "مش فاكر"، سيب التفصيلة فاضية (null)، من غير نص بديل.',
       '- مصري عامي حقيقي بس ("عايز" مش "تبغى")، مش فصحى خالص.',
+      '- نوّع في صياغة أسئلتك زي إنسان حقيقي بيتكلم — ممنوع تكرر نفس تركيبة الجملة اللي استخدمتها في ردك اللي فات.',
       '- كل حاجة جوه "card" إنجليزي احترافي مناسب لـ ATS، والـ bullets تبدأ بفعل قوي.',
 
       ...sectionSpecificRules(section),
@@ -90,9 +97,14 @@ export function buildSectionReplyPrompt(section: SectionId, history: LlmMessage[
       '- ممنوع تشرح تعريف حاجة أو تقترح تكنولوجيا/مكان/مثال المستخدم مقالوش.',
 
       'رد بكائن JSON بس، من غير أي نص قبله أو بعده:',
-      `{"message": string, "section": "${section}", "sectionDone": boolean, "card": ${CARD_SHAPE_BY_SECTION[section]}|null}`,
+      section === 'experience'
+        ? `{"message": string, "section": "experience", "sectionDone": boolean, "hasNoExperience": boolean, "card": ${CARD_SHAPE_BY_SECTION.experience}|null}`
+        : `{"message": string, "section": "${section}", "sectionDone": boolean, "card": ${CARD_SHAPE_BY_SECTION[section]}|null}`,
       '"sectionDone": true لو البيانات كاملة من غير نقص أو اختراع، وإلا false. "card" لازم يكون null لو false.',
-    ].join('\n'),
+      section === 'experience' ? '"hasNoExperience": true بس لو مفيش خبرة شغل، وإلا false.' : null,
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n'),
   };
 
   return [system, ...history, { role: 'user', content: userText }];
