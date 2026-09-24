@@ -202,3 +202,42 @@ X-Device-Id: {{deviceId}}
   "isLast": true,
   "edits": null
 }
+
+### GET /cv — the device's current CV, even if incomplete (isComplete: false). Empty sections come back as [], never null.
+GET {{baseUrl}}/cv
+X-Device-Id: {{deviceId}}
+
+### GET /cv for a device that has none yet — NOT_FOUND
+GET {{baseUrl}}/cv
+X-Device-Id: 00000000-0000-4000-8000-000000000002
+
+### PATCH /cv — fill in a section from the review screen (e.g. one left pending after a skipped/incomplete section). Validated with the same per-section schema as the conversation's own extraction; counts as confirmed afterwards.
+PATCH {{baseUrl}}/cv
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "experience": [
+    { "title": "Accountant", "company": "Some Company", "start": "2023", "end": null, "bullets": ["Managed financial reports", "Reviewed accounts"] }
+  ]
+}
+
+### PATCH /cv — several sections and flat basic fields at once; "projects" is always an array here even though the conversation's own card for it is a single object.
+PATCH {{baseUrl}}/cv
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "title": "Junior Accountant",
+  "skills": [{ "name": "Excel", "level": "advanced" }],
+  "projects": [{ "title": "Budget Tracker", "description": "A personal finance tool", "bullets": ["Tracked monthly expenses"] }]
+}
+
+### PATCH /cv with an invalid value (bad skill level) — INVALID_REQUEST, same per-section validation as extraction
+PATCH {{baseUrl}}/cv
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "skills": [{ "name": "Excel", "level": "not-a-real-level" }]
+}

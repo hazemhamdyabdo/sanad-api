@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import { generateId } from '../../common/ids.js';
+import { AppError } from '../../common/errors/app-error.js';
 import type { SectionId } from '../../common/types/contract.js';
 import { CvRepository } from './cv.repository.js';
+import { ARRAY_SECTIONS, toCvResponseDto, type CvResponseDto } from './dto/cv-response.dto.js';
+import type { PatchCvDto } from './dto/patch-cv.dto.js';
 import type { CvContact } from './entities/cv.entity.js';
+import { cvPatchSchema } from './schemas/cv-patch.schema.js';
 
 export interface ConfirmSectionResult {
   cvId: string;
@@ -90,5 +94,70 @@ export class CvService {
 
     const saved = await this.cvRepository.saveCv(cv, manager);
     return { cvId: saved.id, isComplete: saved.isComplete };
+  }
+
+  async getForDevice(deviceId: string): Promise<CvResponseDto> {
+    const cv = await this.cvRepository.findByDeviceId(deviceId);
+    if (!cv) {
+      throw new AppError('NOT_FOUND', 'مفيش سيرة ذاتية لسه للجهاز ده', { retryable: false });
+    }
+    const sections = await this.cvRepository.findSectionsByCvId(cv.id);
+    return toCvResponseDto(cv, sections);
+  }
+
+  /**
+   * Applies one or more sections' worth of edits from the review screen. Each field is validated
+   * against the same shape the conversation flow itself produces (`cvPatchSchema`, built from
+   * `CARD_SCHEMA_BY_SECTION`) — a section edited this way counts as confirmed from then on, same as
+   * if the user had confirmed it in the conversation.
+   */
+  async patch(deviceId: string, dto: PatchCvDto): Promise<CvResponseDto> {
+    const cv = await this.cvRepository.findByDeviceId(deviceId);
+    if (!cv) {
+      throw new AppError('NOT_FOUND', 'مفيش سيرة ذاتية لسه للجهاز ده', { retryable: false });
+    }
+
+    const result = cvPatchSchema.safeParse(dto);
+    if (!result.success) {
+      throw new AppError('INVALID_REQUEST', 'البيانات اللي بعتها مش صحيحة', { retryable: false });
+    }
+    const patch = result.data;
+
+    if (patch.name !== undefined) {
+      cv.name = patch.name;
+    }
+    if (patch.title !== undefined) {
+      cv.title = patch.title;
+    }
+    if (patch.contact !== undefined) {
+      const { phone, email, location } = patch.contact;
+      cv.contact = {
+        ...cv.contact,
+        ...(phone !== undefined && { phone: phone ?? undefined }),
+        ...(email !== undefined && { email: email ?? undefined }),
+        ...(location !== undefined && { location: location ?? undefined }),
+      } satisfies CvContact;
+    }
+    if (patch.summary !== undefined) {
+      cv.summary = patch.summary;
+    }
+    if ((patch.name !== undefined || patch.title !== undefined || patch.contact !== undefined) && !cv.confirmedSections.includes('basic')) {
+      cv.confirmedSections = [...cv.confirmedSections, 'basic'];
+    }
+
+    for (const section of ARRAY_SECTIONS) {
+      const content = patch[section];
+      if (content === undefined) {
+        continue;
+      }
+      await this.cvRepository.upsertSection(cv.id, section, content);
+      if (!cv.confirmedSections.includes(section)) {
+        cv.confirmedSections = [...cv.confirmedSections, section];
+      }
+    }
+
+    await this.cvRepository.saveCv(cv);
+    const sections = await this.cvRepository.findSectionsByCvId(cv.id);
+    return toCvResponseDto(cv, sections);
   }
 }

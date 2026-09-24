@@ -1,13 +1,15 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CvController } from './cv.controller.js';
 import { CvRepository } from './cv.repository.js';
 import { CvService } from './cv.service.js';
 import { Cv } from './entities/cv.entity.js';
 import { CvSection } from './entities/cv-section.entity.js';
 
-/** No controller yet — GET/PATCH /cv and POST /cv/pdf land with the cv-building endpoints. For now this only exposes what device and conversation need: hasCv, cascading cv deletes, and confirming a section into the cv. */
+/** POST /cv/pdf isn't built yet — everything else (GET/PATCH /cv, hasCv, cascading cv deletes, confirming a section into the cv) lives here. */
 @Module({
   imports: [TypeOrmModule.forFeature([Cv, CvSection])],
+  controllers: [CvController],
   providers: [CvService, CvRepository],
   exports: [CvService],
 })
