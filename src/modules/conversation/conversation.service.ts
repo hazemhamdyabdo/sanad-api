@@ -149,7 +149,7 @@ export class ConversationService {
       section: reply.section,
       type: 'section_card',
       text: null,
-      // reply.card's exact shape depends on reply.section (see sectionReplySchema); by now it's already zod-validated.
+      // reply.card's exact shape depends on reply.section (see CARD_SCHEMA_BY_SECTION); by now it's already zod-validated.
       card: reply.card as Record<string, unknown> | unknown[] | null,
       quickReplies: null,
       source: null,

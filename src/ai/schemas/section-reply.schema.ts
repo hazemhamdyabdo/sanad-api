@@ -73,7 +73,7 @@ const languagesCardSchema = z
   )
   .min(1);
 
-/** Exported so other modules (e.g. validating a user's `edits` to a card before confirming a section) can reuse the exact same shape the AI's output is checked against. */
+/** Exported so other modules (e.g. validating a user's `edits` to a card before confirming a section, and SectionReplyService's extraction-call validation) can reuse the exact same shape. */
 export const CARD_SCHEMA_BY_SECTION: Record<SectionId, z.ZodType> = {
   basic: basicCardSchema,
   experience: experienceCardSchema,
@@ -84,57 +84,31 @@ export const CARD_SCHEMA_BY_SECTION: Record<SectionId, z.ZodType> = {
   languages: languagesCardSchema,
 };
 
-function sectionVariant<Id extends SectionId>(id: Id, cardSchema: z.ZodType) {
-  return z.object({
-    message: text(),
-    section: z.literal(id),
-    sectionDone: z.boolean(),
-    card: cardSchema.nullable(),
-  });
-}
-
 /**
- * `experience` gets its own variant with `hasNoExperience`: a user who's
- * never worked before has nothing to put in an experience array, and
- * forcing the model to choose between inventing a job and sending an
- * empty array (which fails the array's own min(1)) is exactly what broke
- * this path before. This gives it a third, honest option — the contract's
- * own note that `projects` replaces `experience` for exactly this case is
- * what ConversationService acts on when this fires.
+ * The conversation call's output — deliberately minimal. A single prompt
+ * that has to hold a natural conversation AND extract structured per-section
+ * data at the same time overloads a small model: that combination is what
+ * caused a raw user message to get dumped straight into the `name` field
+ * instead of being parsed. Splitting into this short conversation call and a
+ * separate extraction call (run only once `sectionDone` fires, validated
+ * against CARD_SCHEMA_BY_SECTION) keeps each prompt short enough to follow
+ * reliably, and makes extraction deterministic instead of competing with the
+ * conversation for the model's attention.
  */
-const experienceReplyVariant = z.object({
+export const conversationReplySchema = z.object({
   message: text(),
-  section: z.literal('experience'),
   sectionDone: z.boolean(),
+  /** Only meaningful for `experience` — always false for every other section. */
   hasNoExperience: z.boolean().default(false),
-  card: CARD_SCHEMA_BY_SECTION.experience.nullable(),
 });
 
-/** Each section's card has its own shape — kept in sync with the field list `ai/prompts/section-reply.prompt.ts` puts in the system message. */
-const sectionReplyUnion = z.discriminatedUnion('section', [
-  sectionVariant('basic', CARD_SCHEMA_BY_SECTION.basic),
-  experienceReplyVariant,
-  sectionVariant('projects', CARD_SCHEMA_BY_SECTION.projects),
-  sectionVariant('education', CARD_SCHEMA_BY_SECTION.education),
-  sectionVariant('certificates', CARD_SCHEMA_BY_SECTION.certificates),
-  sectionVariant('skills', CARD_SCHEMA_BY_SECTION.skills),
-  sectionVariant('languages', CARD_SCHEMA_BY_SECTION.languages),
-]);
+export type ConversationReply = z.infer<typeof conversationReplySchema>;
 
-/**
- * A `card` is only ever meaningful when `sectionDone` is true — nothing
- * renders or persists it otherwise. A card sent alongside `sectionDone:
- * false` is dropped by SectionReplyService, not rejected here: failing the
- * whole reply (and costing the user their turn) over a field nobody reads
- * isn't worth it. What's actually fatal is a `sectionDone: true` with
- * nothing to show for it — except `experience` + `hasNoExperience`, where
- * "nothing to show" is the whole point.
- */
-export const sectionReplySchema = sectionReplyUnion.superRefine((data, ctx) => {
-  const skipsCard = data.section === 'experience' && data.hasNoExperience;
-  if (data.sectionDone && data.card === null && !skipsCard) {
-    ctx.addIssue({ code: 'custom', message: 'card is required when sectionDone is true', path: ['card'] });
-  }
-});
-
-export type SectionReply = z.infer<typeof sectionReplyUnion>;
+/** The final, consumer-facing shape SectionReplyService returns after combining both calls. */
+export interface SectionReply {
+  message: string;
+  section: SectionId;
+  sectionDone: boolean;
+  hasNoExperience: boolean;
+  card: Record<string, unknown> | unknown[] | null;
+}
