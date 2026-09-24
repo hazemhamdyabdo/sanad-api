@@ -131,7 +131,7 @@ export function buildConversationPrompt(section: SectionId, history: LlmMessage[
       section === 'experience'
         ? '{"message": string, "sectionDone": boolean, "hasNoExperience": boolean}'
         : '{"message": string, "sectionDone": boolean}',
-      '"sectionDone": true لو البيانات كاملة من غير نقص أو اختراع، وإلا false.',
+      '"sectionDone": true لو البيانات كاملة من غير نقص أو اختراع، وإلا false. لو true، لازم "message" يكون جملة إغلاق عادية من غير أي علامة استفهام فيها خالص — حتى لو سؤال تأكيدي زي "تمام؟"، ده لسه سؤال ومينفعش مع sectionDone: true.',
       section === 'experience' ? '"hasNoExperience": true بس لو مفيش خبرة شغل، وإلا false.' : null,
     ]
       .filter((line): line is string => line !== null)
@@ -154,8 +154,14 @@ export function buildExtractionPrompt(section: SectionId, history: LlmMessage[])
     content: [
       `دي محادثة بين مساعد ومستخدم بيبني سيرة ذاتية (CV)، عن قسم "${SECTION_LABELS[section]}" (current_section: ${section}).`,
       'مهمتك: اقرأ المحادثة واستخرج البيانات اللي المستخدم قالها بالفعل، وحطها في شكل JSON محدد. متتكلمش، ومتسألش سؤال، ومتضيفش نص.',
-      '- متخترعش أي رقم أو تاريخ أو اسم أو تفصيلة المستخدم مقالهاش. لو تفصيلة ناقصة والحقل بيسمح بـ null، سيبها null.',
+      '- متخترعش أي رقم أو تاريخ أو اسم أو تفصيلة المستخدم مقالهاش. لو تفصيلة ناقصة جوه عنصر حقيقي والحقل بيسمح بـ null، سيبها null.',
       '- كل حاجة في الناتج إنجليزي احترافي مناسب لـ ATS، والـ bullets تبدأ بفعل قوي.',
+      CARD_SHAPE_BY_SECTION[section].startsWith('[')
+        ? '- رجع array فاضي [] بس لو المستخدم مقالش عن أي عنصر خالص في المحادثة كلها من الأول للآخر. لو ذكر عنصر واحد على الأقل في أي وقت في المحادثة، لازم تحطه في الـ array — كلمة "مفيش" أو "خلاص" في آخر رسالة بترد بس على سؤال "في حاجة تانية؟"، يعني "مفيش زيادة عن اللي قولته"، ومعناهاش إلغاء أو تجاهل اللي اتقال قبل كده في المحادثة. ممنوع تضيف عنصر بقيم null بدل ما ترجع array فاضي.'
+        : null,
+      CARD_SHAPE_BY_SECTION[section].startsWith('[')
+        ? '  مثال: المستخدم قال "عربي لغة أم" و"إنجليزي متقدم"، وآخر رسالة بتاعته "مفيش حاجة تانية، خلصنا". الناتج الصح هنا مش []، هو الاتنين اللي قالهم فعلاً — "مفيش" هنا معناها مفيش لغة تالتة، مش إلغاء العربي والإنجليزي.'
+        : null,
       section === 'basic'
         ? '- "name": لو المستخدم قاله عربي حوّله لحروف إنجليزية بالنطق (محمد أحمد → Mohamed Ahmed). "title" و"location" إنجليزي حتى لو المستخدم قالهم عربي.'
         : null,

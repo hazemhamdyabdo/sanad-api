@@ -11,18 +11,22 @@ const basicCardSchema = z.object({
   location: text().nullable(),
 });
 
-/** A user usually has more than one job — an array so a second (or third) entry doesn't get dropped. */
-const experienceCardSchema = z
-  .array(
-    z.object({
-      title: text(),
-      company: text(),
-      start: text(),
-      end: text().nullable(),
-      bullets: z.array(text()).min(1),
-    }),
-  )
-  .min(1);
+/**
+ * A user usually has more than one job — an array so a second (or third)
+ * entry doesn't get dropped. No `.min(1)`: the genuinely-empty case is
+ * meant to go through the `hasNoExperience` pivot instead of reaching
+ * extraction at all, but if it slips through anyway, an empty array is a
+ * far better outcome than hard-failing the user's turn over it.
+ */
+const experienceCardSchema = z.array(
+  z.object({
+    title: text(),
+    company: text(),
+    start: text(),
+    end: text().nullable(),
+    bullets: z.array(text()).min(1),
+  }),
+);
 
 const projectsCardSchema = z.object({
   title: text(),
@@ -30,48 +34,46 @@ const projectsCardSchema = z.object({
   bullets: z.array(text()).min(1),
 });
 
-/** A user usually has more than one degree/diploma — an array, same reasoning as experience. */
-const educationCardSchema = z
-  .array(
-    z.object({
-      degree: text(),
-      school: text(),
-      year: text(),
-    }),
-  )
-  .min(1);
+/**
+ * A user usually has more than one degree/diploma — an array, same reasoning
+ * as experience. Unlike experience, there's no dedicated pivot for "no
+ * education at all", so an empty array has to be a valid result here: a
+ * user who's entirely self-taught genuinely has zero entries to report, and
+ * that's a legitimate answer, not a defect to reject.
+ */
+const educationCardSchema = z.array(
+  z.object({
+    degree: text(),
+    school: text(),
+    year: text(),
+  }),
+);
 
-/** A user usually has more than one certificate — an array, same reasoning as experience. */
-const certificatesCardSchema = z
-  .array(
-    z.object({
-      name: text(),
-      date: text().nullable(),
-    }),
-  )
-  .min(1);
+/** A user usually has more than one certificate, but plenty of people genuinely have none — an empty array is a legitimate, honest answer, not a defect. */
+const certificatesCardSchema = z.array(
+  z.object({
+    name: text(),
+    date: text().nullable(),
+  }),
+);
 
 /** Unlike languages, a skill level is never "native". */
 const SKILL_LEVELS = LEVELS.filter((level) => level !== 'native') as Exclude<(typeof LEVELS)[number], 'native'>[];
 
-/** A user typically names several skills/languages in one answer — an array so the model isn't forced to drop all but one. */
-const skillsCardSchema = z
-  .array(
-    z.object({
-      name: text(),
-      level: z.enum(SKILL_LEVELS),
-    }),
-  )
-  .min(1);
+/** A user typically names several skills/languages in one answer — an array so the model isn't forced to drop all but one. An empty array is still valid: rare, but not worth hard-failing a whole conversation over. */
+const skillsCardSchema = z.array(
+  z.object({
+    name: text(),
+    level: z.enum(SKILL_LEVELS),
+  }),
+);
 
-const languagesCardSchema = z
-  .array(
-    z.object({
-      name: text(),
-      level: z.enum(LEVELS),
-    }),
-  )
-  .min(1);
+const languagesCardSchema = z.array(
+  z.object({
+    name: text(),
+    level: z.enum(LEVELS),
+  }),
+);
 
 /** Exported so other modules (e.g. validating a user's `edits` to a card before confirming a section, and SectionReplyService's extraction-call validation) can reuse the exact same shape. */
 export const CARD_SCHEMA_BY_SECTION: Record<SectionId, z.ZodType> = {

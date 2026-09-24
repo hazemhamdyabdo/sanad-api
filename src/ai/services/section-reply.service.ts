@@ -6,6 +6,8 @@ import { buildConversationPrompt, buildExtractionPrompt } from '../prompts/secti
 import { CARD_SCHEMA_BY_SECTION, conversationReplySchema, type SectionReply } from '../schemas/section-reply.schema.js';
 
 const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص قبله أو بعده.';
+const EMPTY_ARRAY_REMINDER =
+  'راجع المحادثة تاني بالكامل، من أول رسالة للآخر — هل ذكر المستخدم أي عنصر فعلي في أي رسالة من رسايله في أي وقت؟ لو أيوه، لازم يتحط في الـ array حتى لو آخر رسالة بتاعته بتقول "مفيش" أو "خلاص". رجع array فاضي [] بس لو مفيش أي عنصر اتقال فعلاً من الأول للآخر.';
 
 function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
@@ -25,6 +27,22 @@ function extractJsonValue(raw: string): string {
     return end === -1 ? trimmed : trimmed.slice(0, end + 1);
   }
   return extractJsonObject(raw);
+}
+
+/**
+ * The extraction call is told to return `[]` when there's genuinely nothing
+ * for a section, but a small model occasionally hedges by returning a
+ * single stub entry with every field null instead — a placeholder for "no
+ * entry" rather than an actual entry. Dropping such stubs before validation
+ * means that slip degrades to an empty array instead of failing the whole
+ * turn with AI_UNAVAILABLE. Only array-shaped output is affected; `parsed`
+ * is left untouched otherwise.
+ */
+function dropAllNullEntries(parsed: unknown): unknown {
+  if (!Array.isArray(parsed)) {
+    return parsed;
+  }
+  return parsed.filter((entry) => !(entry && typeof entry === 'object' && Object.values(entry).every((value) => value === null)));
 }
 
 const ARABIC_CHAR = '[\\u0600-\\u06FF]';
@@ -90,7 +108,27 @@ export class SectionReplyService {
   private async extractCard(section: SectionId, sectionHistory: LlmMessage[]): Promise<Record<string, unknown> | unknown[]> {
     const extractionMessages = buildExtractionPrompt(section, sectionHistory);
     const parsed = await this.completeJsonWithRetry(extractionMessages, extractJsonValue);
-    const result = CARD_SCHEMA_BY_SECTION[section].safeParse(parsed);
+    const cleaned = dropAllNullEntries(parsed);
+
+    // An empty array is a legitimate answer, but also the model's most likely failure mode: it can latch
+    // onto a closing "مفيش"/"خلاص" in the last message and wipe out real entries mentioned earlier in the
+    // same section. Only worth double-checking when there was more than one user turn — a section closed
+    // on the very first reply was never going to have anything to lose. This has to run on the raw parsed
+    // value, before schema validation — a schema with a `.min(1)` on the array would otherwise throw before
+    // this check ever got a chance to trigger a retry.
+    const hadMultipleUserTurns = sectionHistory.filter((entry) => entry.role === 'user').length > 1;
+    if (Array.isArray(cleaned) && cleaned.length === 0 && hadMultipleUserTurns) {
+      this.logger.warn(`Extraction returned an empty array after multiple user turns (section: ${section}) — re-checking once.`);
+      const recheckMessages: LlmMessage[] = [...extractionMessages, { role: 'assistant', content: JSON.stringify(parsed) }, { role: 'user', content: EMPTY_ARRAY_REMINDER }];
+      const recheckParsed = await this.completeJsonWithRetry(recheckMessages, extractJsonValue);
+      return this.parseCard(section, recheckParsed);
+    }
+
+    return this.parseCard(section, parsed);
+  }
+
+  private parseCard(section: SectionId, parsed: unknown): Record<string, unknown> | unknown[] {
+    const result = CARD_SCHEMA_BY_SECTION[section].safeParse(dropAllNullEntries(parsed));
     if (!result.success) {
       this.logger.warn(`Extraction call failed validation (section: ${section}): ${JSON.stringify(result.error.issues)}`);
       throw new AppError('AI_UNAVAILABLE', 'رد الذكاء الاصطناعي مش بالشكل المتوقع، جرب تاني', { retryable: true });
