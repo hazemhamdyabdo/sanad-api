@@ -9,6 +9,24 @@ const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص ق
 const EMPTY_ARRAY_REMINDER =
   'راجع المحادثة تاني بالكامل، من أول رسالة للآخر — هل ذكر المستخدم أي عنصر فعلي في أي رسالة من رسايله في أي وقت؟ لو أيوه، لازم يتحط في الـ array حتى لو آخر رسالة بتاعته بتقول "مفيش" أو "خلاص". رجع array فاضي [] بس لو مفيش أي عنصر اتقال فعلاً من الأول للآخر.';
 
+/**
+ * Recognizing "I'm done" is treated as a deterministic, code-level decision, not something left
+ * to the model to get right on every turn — a small model closing a section is exactly the kind
+ * of behavior that shouldn't depend on it correctly interpreting Egyptian colloquial phrasing
+ * every single time. Matches only short messages: a longer, substantive answer that happens to
+ * contain "مفيش" (e.g. describing a job) is real content, not a closing utterance.
+ */
+const CLOSING_INTENT = /خلاص|مفيش|بس كده|كده بس|كفاية|خلصنا|خلصت/;
+const MAX_MESSAGE_LENGTH_FOR_CLOSING_INTENT = 40;
+
+function hasClosingIntent(userText: string): boolean {
+  const trimmed = userText.trim();
+  return trimmed.length <= MAX_MESSAGE_LENGTH_FOR_CLOSING_INTENT && CLOSING_INTENT.test(trimmed);
+}
+
+/** After this many prior "is there another?" turns in a section, close it automatically rather than risk asking forever. */
+const MAX_ASSISTANT_TURNS_BEFORE_FORCED_CLOSE = 4;
+
 function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
   const start = trimmed.indexOf('{');
@@ -76,7 +94,7 @@ export class SectionReplyService {
 
   constructor(@Inject(LLM_PROVIDER) private readonly llm: LlmProvider) {}
 
-  async generate(section: SectionId, history: LlmMessage[], userText: string): Promise<SectionReply> {
+  async generate(section: SectionId, history: LlmMessage[], userText: string, previousBestCard?: Record<string, unknown> | unknown[] | null): Promise<SectionReply> {
     const convMessages = buildConversationPrompt(section, history, userText);
     const convParsed = await this.completeJsonWithRetry(convMessages, extractJsonObject);
     const convResult = conversationReplySchema.safeParse(convParsed);
@@ -89,9 +107,22 @@ export class SectionReplyService {
     const hasNoExperience = section === 'experience' && convResult.data.hasNoExperience;
     let sectionDone = convResult.data.sectionDone;
 
-    // A message that's still asking something can't also mean "this section is done" — except the
-    // hasNoExperience pivot, where the question legitimately belongs to the section being switched to.
-    if (sectionDone && !hasNoExperience && /[؟?]/.test(message)) {
+    // Closing a section is decided in code, not left entirely to the model: a user who's clearly
+    // said "خلاص"/"مفيش" should close on the spot, and a section that's already asked "another
+    // one?" this many times closes automatically rather than risk looping forever on a small
+    // model that doesn't reliably recognize its own closing signals turn after turn.
+    const priorAssistantTurns = history.filter((entry) => entry.role === 'assistant').length;
+    if (!hasNoExperience && priorAssistantTurns >= MAX_ASSISTANT_TURNS_BEFORE_FORCED_CLOSE) {
+      this.logger.warn(`Hard cap reached (${priorAssistantTurns} prior turns) — forcing sectionDone: true (section: ${section}).`);
+      sectionDone = true;
+    } else if (!hasNoExperience && hasClosingIntent(userText)) {
+      if (!sectionDone) {
+        this.logger.warn(`User signaled closing intent ("${userText}") — overriding sectionDone to true (section: ${section}).`);
+      }
+      sectionDone = true;
+    } else if (sectionDone && !hasNoExperience && /[؟?]/.test(message)) {
+      // A message that's still asking something can't also mean "this section is done" — except the
+      // hasNoExperience pivot, where the question legitimately belongs to the section being switched to.
       this.logger.warn(`Conversation call said sectionDone: true while still asking a question (section: ${section}) — overriding to false.`);
       sectionDone = false;
     }
@@ -100,6 +131,14 @@ export class SectionReplyService {
     if (sectionDone && !hasNoExperience) {
       const fullHistory: LlmMessage[] = [...history, { role: 'user', content: userText }];
       card = await this.extractCard(section, fullHistory);
+
+      // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
+      // came back with fewer entries than the best one already produced for this section, that's
+      // very likely the model dropping entries, not the user retracting them — keep the larger one.
+      if (Array.isArray(card) && Array.isArray(previousBestCard) && card.length < previousBestCard.length) {
+        this.logger.warn(`New extraction (${card.length} entries) is smaller than a prior one (${previousBestCard.length}) for section ${section} — keeping the larger one.`);
+        card = previousBestCard;
+      }
     }
 
     return { message, section, sectionDone, hasNoExperience, card };

@@ -62,6 +62,7 @@ export class ConversationController {
     const session = await this.conversationService.getActiveOwnedSession(sessionId, device.id);
     const section = session.currentSection ?? 'basic';
     const history = await this.conversationService.getMessageHistoryForPrompt(session.id, section);
+    const previousBestCard = await this.conversationService.getBestPriorSectionCard(session.id, section);
 
     // Saved before the AI starts, per the contract — a dropped connection
     // can always be recovered with GET /conversations/:sessionId.
@@ -72,7 +73,7 @@ export class ConversationController {
     sse.send('user_message', toMessageResponseDto(userMessage));
 
     try {
-      const reply = await this.sectionReplyService.generate(section, history, dto.text);
+      const reply = await this.sectionReplyService.generate(section, history, dto.text, previousBestCard);
 
       // Persisted before any SSE event about it goes out, for the same reason.
       const aiMessage = await this.conversationService.appendAiTextMessage(session, reply);

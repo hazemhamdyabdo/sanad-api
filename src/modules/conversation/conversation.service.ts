@@ -111,6 +111,26 @@ export class ConversationService {
       .map((message) => ({ role: message.role === 'ai' ? ('assistant' as const) : ('user' as const), content: message.text as string }));
   }
 
+  /**
+   * The largest `section_card` this section has produced so far this conversation (there can be
+   * several unconfirmed attempts if the model closed the section more than once before the user
+   * confirmed) — array-shaped cards compare by entry count, object-shaped cards just use the most
+   * recent. Passed into SectionReplyService so a new extraction that comes back with fewer entries
+   * than an earlier attempt can be recognized as data loss rather than the user's own edit.
+   */
+  async getBestPriorSectionCard(sessionId: string, section: SectionId): Promise<Record<string, unknown> | unknown[] | null> {
+    const messages = await this.conversationRepository.findMessagesBySessionId(sessionId);
+    const cards = messages.filter((message) => message.type === 'section_card' && message.section === section && message.card !== null).map((message) => message.card as Record<string, unknown> | unknown[]);
+    if (cards.length === 0) {
+      return null;
+    }
+    const arrays = cards.filter((card): card is unknown[] => Array.isArray(card));
+    if (arrays.length > 0) {
+      return arrays.reduce((best, card) => (card.length > best.length ? card : best));
+    }
+    return cards[cards.length - 1] ?? null;
+  }
+
   appendUserMessage(session: ConversationSession, dto: SendMessageDto): Promise<Message> {
     return this.conversationRepository.createMessage({
       id: generateId('msg'),
