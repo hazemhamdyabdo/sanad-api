@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { SectionReplyService } from '../../ai/index.js';
 import { delay } from '../../common/delay.js';
 import { CurrentDevice } from '../../common/decorators/current-device.decorator.js';
+import { AppError } from '../../common/errors/app-error.js';
 import { toErrorBody } from '../../common/errors/to-error-body.js';
 import { SseWriter } from '../../common/sse/sse-writer.js';
 import { tokenize } from '../../common/sse/tokenize.js';
@@ -19,6 +20,8 @@ const TOKEN_DELAY_MS = 30;
 
 @Controller('conversations')
 export class ConversationController {
+  private readonly logger = new Logger(ConversationController.name);
+
   constructor(
     private readonly conversationService: ConversationService,
     private readonly sectionReplyService: SectionReplyService,
@@ -106,6 +109,11 @@ export class ConversationController {
 
       sse.send('done', { currentSection: session.currentSection, status: session.status });
     } catch (error) {
+      // AppError already logs its own context where it's thrown; anything else reaching here is
+      // unexpected and would otherwise vanish — the client only ever sees a generic INTERNAL code.
+      if (!(error instanceof AppError)) {
+        this.logger.error('Unexpected error in sendMessage', error instanceof Error ? error.stack : error);
+      }
       sse.send('error', toErrorBody(error));
     } finally {
       sse.end();

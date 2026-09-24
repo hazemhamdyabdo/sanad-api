@@ -130,7 +130,13 @@ export class SectionReplyService {
     let card: Record<string, unknown> | unknown[] | null = null;
     if (sectionDone && !hasNoExperience) {
       const fullHistory: LlmMessage[] = [...history, { role: 'user', content: userText }];
-      card = await this.extractCard(section, fullHistory);
+      // A closing-only message ("خلاص"/"مفيش") carries no data of its own, and the extraction call
+      // has shown a tendency to latch onto it and report the whole section as empty. The message
+      // still has to stay in the transcript (dropping it left the array ending on an assistant turn,
+      // which the chat API rejects) — instead, the extraction prompt is told explicitly to disregard
+      // it as a data source when deciding what's in the section.
+      const closingMessageOnly = hasClosingIntent(userText) && history.length > 0;
+      card = await this.extractCard(section, fullHistory, closingMessageOnly);
 
       // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
       // came back with fewer entries than the best one already produced for this section, that's
@@ -144,8 +150,8 @@ export class SectionReplyService {
     return { message, section, sectionDone, hasNoExperience, card };
   }
 
-  private async extractCard(section: SectionId, sectionHistory: LlmMessage[]): Promise<Record<string, unknown> | unknown[]> {
-    const extractionMessages = buildExtractionPrompt(section, sectionHistory);
+  private async extractCard(section: SectionId, sectionHistory: LlmMessage[], closingMessageOnly = false): Promise<Record<string, unknown> | unknown[]> {
+    const extractionMessages = buildExtractionPrompt(section, sectionHistory, closingMessageOnly);
     const parsed = await this.completeJsonWithRetry(extractionMessages, extractJsonValue);
     const cleaned = dropAllNullEntries(parsed);
 

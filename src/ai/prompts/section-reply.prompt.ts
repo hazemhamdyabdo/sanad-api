@@ -149,7 +149,7 @@ export function buildConversationPrompt(section: SectionId, history: LlmMessage[
  * section's transcript, so it never competes with holding the conversation
  * for the model's attention.
  */
-export function buildExtractionPrompt(section: SectionId, history: LlmMessage[]): LlmMessage[] {
+export function buildExtractionPrompt(section: SectionId, history: LlmMessage[], closingMessageOnly = false): LlmMessage[] {
   const system: LlmMessage = {
     role: 'system',
     content: [
@@ -162,6 +162,9 @@ export function buildExtractionPrompt(section: SectionId, history: LlmMessage[])
         : null,
       CARD_SHAPE_BY_SECTION[section].startsWith('[')
         ? '  مثال: المستخدم قال "عربي لغة أم" و"إنجليزي متقدم"، وآخر رسالة بتاعته "مفيش حاجة تانية، خلصنا". الناتج الصح هنا مش []، هو الاتنين اللي قالهم فعلاً — "مفيش" هنا معناها مفيش لغة تالتة، مش إلغاء العربي والإنجليزي.'
+        : null,
+      closingMessageOnly
+        ? '- آخر رسالة من المستخدم في المحادثة دي هي مجرد تأكيد إنه خلص ("خلاص"، "مفيش"، "كفاية") ومفيهاش بيانات جديدة خالص. تجاهلها تمامًا كمصدر بيانات، واستخرج كل حاجة من باقي رسايل المستخدم قبلها.'
         : null,
       section === 'basic'
         ? '- "name": لو المستخدم قاله عربي حوّله لحروف إنجليزية بالنطق (محمد أحمد → Mohamed Ahmed). "title" و"location" إنجليزي حتى لو المستخدم قالهم عربي.'
