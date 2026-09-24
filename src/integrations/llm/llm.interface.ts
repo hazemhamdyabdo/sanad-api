@@ -22,3 +22,6 @@ export interface LlmProvider {
 }
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
+
+/** Same port, bound to the (stronger) model used for structured extraction rather than conversation. */
+export const EXTRACTION_LLM_PROVIDER = Symbol('EXTRACTION_LLM_PROVIDER');

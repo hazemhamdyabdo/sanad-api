@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { SectionId } from '../../common/types/contract.js';
-import { LLM_PROVIDER, type LlmMessage, type LlmProvider } from '../../integrations/llm/llm.interface.js';
+import { EXTRACTION_LLM_PROVIDER, LLM_PROVIDER, type LlmMessage, type LlmProvider } from '../../integrations/llm/llm.interface.js';
 import { buildConversationPrompt, buildExtractionPrompt } from '../prompts/section-reply.prompt.js';
 import { CARD_SCHEMA_BY_SECTION, conversationReplySchema, type SectionReply } from '../schemas/section-reply.schema.js';
 
@@ -17,6 +17,17 @@ const SOFT_FALLBACK_MESSAGE = 'معلش، ممكن تقولهالي تاني؟';
  * persisted; a short closing answer on the next turn lets extraction run over it again.
  */
 const EXTRACTION_RECOVERY_MESSAGE = 'تمام، سجلت اللي قولته. في تفصيلة تانية تحب تضيفها؟';
+/** Must match EXTRACTION_RECOVERY_MESSAGE — used to count how many times it's already been asked in this section. */
+const EXTRACTION_RECOVERY_MENTION = /في تفصيلة تانية تحب تضيفها/;
+/** How many times the recovery question may be asked per section before the section is skipped instead. */
+const EXTRACTION_RECOVERY_LIMIT = 1;
+
+/**
+ * Said when a section is skipped because no card could be produced (most often: the user genuinely has
+ * nothing for it, e.g. no certificates). The next section's fixed opening question follows as its own
+ * message, so this must not ask anything itself.
+ */
+const SECTION_SKIPPED_MESSAGE = 'تمام، مفيش مشكلة. لو حبيت تضيف حاجة في الجزء ده بعدين، تقدر من صفحة مراجعة الـ CV.';
 const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص قبله أو بعده.';
 
 /** Reminders sent on each retry of the conversation call, escalating from a pure formatting nudge to also asking for different phrasing. */
@@ -32,7 +43,7 @@ const EMPTY_ARRAY_REMINDER =
  * every single time. Matches only short messages: a longer, substantive answer that happens to
  * contain "مفيش" (e.g. describing a job) is real content, not a closing utterance.
  */
-const CLOSING_INTENT = /خلاص|مفيش|بس كده|كده بس|كفاية|خلصنا|خلصت/;
+const CLOSING_INTENT = /خلاص|مفيش|بس كد[اه]|كد[اه] بس|تمام كد[اه]|كد[اه] تمام|كفاية|خلصنا|خلصت|^(لا|لأ|لاء)[،,]?\s*(شكر|تمام|مفيش|خلاص)/;
 const MAX_MESSAGE_LENGTH_FOR_CLOSING_INTENT = 40;
 
 function hasClosingIntent(userText: string): boolean {
@@ -41,6 +52,18 @@ function hasClosingIntent(userText: string): boolean {
 }
 
 const NEUTRAL_CLOSING_MESSAGE = 'تمام، خلصنا القسم ده.';
+
+/**
+ * The model's own closing line (the prompt suggests "تمام، كده خلصنا البيانات دي، بص عليها تحت") —
+ * it sometimes writes exactly that while still returning `sectionDone: false`, which left the user
+ * told to "look below" at a card that never came. A message that says it's done and asks nothing is
+ * treated as done, in code, rather than trusting the flag.
+ */
+const MODEL_CLOSING_PHRASE = /بص عليها تحت|بص عليه تحت|بصي عليها تحت|خلصنا/;
+
+function soundsLikeClosing(message: string): boolean {
+  return MODEL_CLOSING_PHRASE.test(message) && !/[؟?]/.test(message);
+}
 
 /**
  * Whether a section can close with a required field still missing is decided in code, not left to
@@ -87,6 +110,11 @@ for (const rules of Object.values(REQUIRED_FIELDS_BY_SECTION)) {
       throw new Error(`RequiredFieldRule misconfigured: mention pattern ${rule.mention} doesn't match its own ask text "${rule.ask}".`);
     }
   }
+}
+
+function hasEntries(card: Record<string, unknown> | unknown[] | null | undefined): card is Record<string, unknown> | unknown[] {
+  if (!card) return false;
+  return Array.isArray(card) ? card.length > 0 : Object.keys(card).length > 0;
 }
 
 function countAssistantMentions(history: LlmMessage[], pattern: RegExp): number {
@@ -178,6 +206,16 @@ function insertArabicLatinBoundarySpace(text: string): string {
 
 type RetryOutcome<T> = { success: true; data: T } | { success: false };
 
+const CONVERSATION_CALL = 'conversation';
+const EXTRACTION_CALL = 'extraction';
+type CallKind = typeof CONVERSATION_CALL | typeof EXTRACTION_CALL;
+
+/**
+ * `empty` = the model looked twice and found nothing (e.g. no certificates) — a real answer.
+ * `failed` = it couldn't produce a valid card at all — the data may be there, so don't give up on it first time.
+ */
+type ExtractionOutcome = { kind: 'card'; card: Record<string, unknown> | unknown[] } | { kind: 'empty' } | { kind: 'failed' };
+
 /**
  * Two LLM calls per turn instead of one. A single prompt that both holds a
  * natural conversation AND extracts structured per-section data overloads a
@@ -197,7 +235,10 @@ type RetryOutcome<T> = { success: true; data: T } | { success: false };
 export class SectionReplyService {
   private readonly logger = new Logger(SectionReplyService.name);
 
-  constructor(@Inject(LLM_PROVIDER) private readonly llm: LlmProvider) {}
+  constructor(
+    @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
+    @Inject(EXTRACTION_LLM_PROVIDER) private readonly extractionLlm: LlmProvider,
+  ) {}
 
   async generate(section: SectionId, history: LlmMessage[], userText: string, previousBestCard?: Record<string, unknown> | unknown[] | null): Promise<SectionReply> {
     const convMessages = buildConversationPrompt(section, history, userText);
@@ -212,7 +253,12 @@ export class SectionReplyService {
     const hasNoExperience = section === 'experience' && convOutcome.data.hasNoExperience;
     let sectionDone = convOutcome.data.sectionDone;
     let finalMessage = message;
-    const skippedIncomplete = false;
+    let skippedIncomplete = false;
+
+    if (!sectionDone && !hasNoExperience && soundsLikeClosing(message)) {
+      this.logger.warn(`Model wrote a closing message but sectionDone: false (section: ${section}) — overriding to true.`);
+      sectionDone = true;
+    }
 
     // An explicit short "خلاص" is safe to recognize in code. Turn counts are not: a useful answer
     // can arrive on any turn, so a budget must never close or discard a section.
@@ -250,12 +296,30 @@ export class SectionReplyService {
       // which the chat API rejects) — instead, the extraction prompt is told explicitly to disregard
       // it as a data source when deciding what's in the section.
       const closingMessageOnly = hasClosingIntent(userText) && history.length > 0;
-      card = await this.extractCard(section, fullHistory, closingMessageOnly);
+      const extraction = await this.extractCard(section, fullHistory, closingMessageOnly);
+      card = extraction.kind === 'card' ? extraction.card : null;
+
+      if (card === null && hasEntries(previousBestCard)) {
+        // An earlier turn in this section already produced a real card — show that rather than lose it.
+        this.logger.warn(`Extraction failed but a prior card exists (section: ${section}) — reusing it.`);
+        card = previousBestCard;
+      }
 
       if (card === null) {
-        // Never advance past information we failed to structure. The full transcript is persisted,
-        // so a later retry can recover it without asking the user to repeat their whole story.
-        finalMessage = EXTRACTION_RECOVERY_MESSAGE;
+        const recoveryAsked = countAssistantMentions(history, EXTRACTION_RECOVERY_MENTION);
+        if (extraction.kind === 'empty' || recoveryAsked >= EXTRACTION_RECOVERY_LIMIT) {
+          // Either the user has nothing for this section (confirmed empty twice), or extraction already
+          // failed once and they were asked. Asking again is what looped forever, so the section is left
+          // unconfirmed and the conversation moves on. Their messages stay persisted, and the section
+          // can be filled from the CV review screen.
+          this.logger.warn(`No card for section ${section} (${extraction.kind}, recovery asked ${recoveryAsked}x) — skipping it.`);
+          finalMessage = SECTION_SKIPPED_MESSAGE;
+          skippedIncomplete = true;
+        } else {
+          // First failure while the user may still be adding things: ask once, then extraction runs
+          // again over the full (persisted) transcript on their next reply.
+          finalMessage = EXTRACTION_RECOVERY_MESSAGE;
+        }
         sectionDone = false;
       } else if (Array.isArray(card) && Array.isArray(previousBestCard) && card.length < previousBestCard.length) {
         // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
@@ -283,17 +347,17 @@ export class SectionReplyService {
    * retry failed outright, or the result stayed empty after a re-check despite real content
    * earlier in the section. Both are "don't show anything", not "show nothing and call it done".
    */
-  private async extractCard(section: SectionId, sectionHistory: LlmMessage[], closingMessageOnly = false): Promise<Record<string, unknown> | unknown[] | null> {
+  private async extractCard(section: SectionId, sectionHistory: LlmMessage[], closingMessageOnly = false): Promise<ExtractionOutcome> {
     const extractionMessages = buildExtractionPrompt(section, sectionHistory, closingMessageOnly);
     const parse = (value: unknown): { success: true; data: Record<string, unknown> | unknown[] } | { success: false; error: { issues: unknown } } => {
       const result = CARD_SCHEMA_BY_SECTION[section].safeParse(dropAllNullEntries(value));
       return result.success ? { success: true, data: result.data as Record<string, unknown> | unknown[] } : { success: false, error: { issues: result.error.issues } };
     };
 
-    const outcome = await this.completeWithRetries(extractionMessages, extractJsonValue, parse, [JSON_ONLY_REMINDER]);
+    const outcome = await this.completeWithRetries(extractionMessages, extractJsonValue, parse, [JSON_ONLY_REMINDER], EXTRACTION_CALL);
     if (!outcome.success) {
       this.logger.warn(`Extraction failed after all retries (section: ${section}).`);
-      return null;
+      return { kind: 'failed' };
     }
 
     // An empty array is a legitimate answer, but also the model's most likely failure mode: it can latch
@@ -304,21 +368,20 @@ export class SectionReplyService {
     if (Array.isArray(outcome.data) && outcome.data.length === 0 && hadMultipleUserTurns) {
       this.logger.warn(`Extraction returned an empty array after multiple user turns (section: ${section}) — re-checking once.`);
       const recheckMessages: LlmMessage[] = [...extractionMessages, { role: 'assistant', content: JSON.stringify(outcome.data) }, { role: 'user', content: EMPTY_ARRAY_REMINDER }];
-      const recheckOutcome = await this.completeWithRetries(recheckMessages, extractJsonValue, parse, []);
+      const recheckOutcome = await this.completeWithRetries(recheckMessages, extractJsonValue, parse, [], EXTRACTION_CALL);
 
       if (!recheckOutcome.success) {
-        return null;
+        return { kind: 'failed' };
       }
       if (Array.isArray(recheckOutcome.data) && recheckOutcome.data.length === 0) {
-        // Still empty despite real content earlier in the section — this is extraction failing to
-        // find what's there, not the user having nothing. Don't confirm an empty card for it.
-        this.logger.warn(`Extraction still empty after re-check despite multiple user turns (section: ${section}) — treating as a failed extraction.`);
-        return null;
+        // Empty twice, from the (stronger) extraction model: the user most likely has nothing here.
+        this.logger.warn(`Extraction still empty after re-check (section: ${section}).`);
+        return { kind: 'empty' };
       }
-      return recheckOutcome.data;
+      return { kind: 'card', card: recheckOutcome.data };
     }
 
-    return outcome.data;
+    return { kind: 'card', card: outcome.data };
   }
 
   /**
@@ -332,11 +395,12 @@ export class SectionReplyService {
     extract: (raw: string) => string,
     validate: (value: unknown) => { success: true; data: T } | { success: false; error: { issues: unknown } },
     reminders: string[],
+    call: CallKind = CONVERSATION_CALL,
   ): Promise<RetryOutcome<T>> {
     let currentMessages = messages;
 
     for (let attempt = 0; attempt <= reminders.length; attempt++) {
-      const raw = await this.complete(currentMessages);
+      const raw = await this.complete(currentMessages, call);
       const parsed = this.tryParse(raw, extract, attempt > 0);
 
       if (parsed !== undefined) {
@@ -355,8 +419,9 @@ export class SectionReplyService {
     return { success: false };
   }
 
-  private complete(messages: LlmMessage[]): Promise<string> {
-    return this.llm.complete({ messages, temperature: 0.4, jsonMode: true });
+  private complete(messages: LlmMessage[], call: CallKind): Promise<string> {
+    const llm = call === EXTRACTION_CALL ? this.extractionLlm : this.llm;
+    return llm.complete({ messages, temperature: call === EXTRACTION_CALL ? 0 : 0.4, jsonMode: true });
   }
 
   private tryParse(raw: string, extract: (raw: string) => string, isRetry = false): unknown {

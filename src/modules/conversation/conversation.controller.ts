@@ -15,6 +15,7 @@ import type { ConfirmSectionResponseDto } from './dto/confirm-section-response.d
 import { toMessageResponseDto, type ConversationResponseDto } from './dto/conversation-response.dto.js';
 import { CreateConversationDto } from './dto/create-conversation.dto.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
+import type { Message } from './entities/message.entity.js';
 
 const TOKEN_DELAY_MS = 30;
 
@@ -81,17 +82,7 @@ export class ConversationController {
       // Persisted before any SSE event about it goes out, for the same reason.
       const aiMessage = await this.conversationService.appendAiTextMessage(session, reply);
 
-      sse.send('message_start', { id: aiMessage.id, role: aiMessage.role, section: aiMessage.section, type: aiMessage.type });
-
-      for (const token of tokenize(reply.message)) {
-        if (sse.isClosed) {
-          break;
-        }
-        sse.send('token', { text: token });
-        await delay(TOKEN_DELAY_MS);
-      }
-
-      sse.send('message_end', { id: aiMessage.id, text: aiMessage.text, quickReplies: null });
+      await this.streamTextMessage(sse, aiMessage);
 
       if (reply.section === 'experience' && reply.hasNoExperience) {
         // No card to confirm here — the section itself is replaced, per the contract's own note that `projects` stands in for `experience` when the user hasn't worked before.
@@ -99,7 +90,8 @@ export class ConversationController {
       } else if (reply.skippedIncomplete) {
         // Extraction couldn't produce a usable card even after every retry — rather than block the
         // conversation forever, this section stays unconfirmed and the flow moves on to the next one.
-        await this.conversationService.skipCurrentSection(session);
+        const nextMessage = await this.conversationService.skipCurrentSection(session);
+        await this.streamTextMessage(sse, nextMessage);
       } else if (reply.sectionDone && reply.card) {
         const cardMessage = await this.conversationService.appendSectionCardMessage(session, reply);
         sse.send('section_card', {
@@ -122,5 +114,18 @@ export class ConversationController {
     } finally {
       sse.end();
     }
+  }
+
+  /** An already-persisted AI text message, streamed as message_start → token* → message_end. */
+  private async streamTextMessage(sse: SseWriter, message: Message): Promise<void> {
+    sse.send('message_start', { id: message.id, role: message.role, section: message.section, type: message.type });
+    for (const token of tokenize(message.text ?? '')) {
+      if (sse.isClosed) {
+        break;
+      }
+      sse.send('token', { text: token });
+      await delay(TOKEN_DELAY_MS);
+    }
+    sse.send('message_end', { id: message.id, text: message.text, quickReplies: null });
   }
 }

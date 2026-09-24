@@ -1,6 +1,6 @@
 import { Logger, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { LLM_PROVIDER, type LlmProvider } from './llm.interface.js';
+import { EXTRACTION_LLM_PROVIDER, LLM_PROVIDER, type LlmProvider } from './llm.interface.js';
 import { FakeLlmProvider } from './providers/fake.provider.js';
 import { MistralProvider } from './providers/mistral.provider.js';
 
@@ -40,7 +40,21 @@ const logger = new Logger('LlmModule');
         throw new Error(`Unknown LLM_PROVIDER "${String(provider)}" — expected "mistral" or "fake".`);
       },
     },
+    {
+      provide: EXTRACTION_LLM_PROVIDER,
+      inject: [ConfigService, LLM_PROVIDER],
+      // Same vendor and key as LLM_PROVIDER, only the model differs. The fake provider already
+      // recognizes the extraction prompt on its own, so it's simply reused.
+      useFactory: (configService: ConfigService, conversationProvider: LlmProvider): LlmProvider => {
+        if (configService.get<string>('ai.llmProvider') !== 'mistral') {
+          return conversationProvider;
+        }
+        const model = configService.get<string>('ai.extractionModel', '');
+        logger.log(`Extraction model: ${model}`);
+        return new MistralProvider(configService.get<string>('ai.apiKey', ''), model);
+      },
+    },
   ],
-  exports: [LLM_PROVIDER],
+  exports: [LLM_PROVIDER, EXTRACTION_LLM_PROVIDER],
 })
 export class LlmModule {}

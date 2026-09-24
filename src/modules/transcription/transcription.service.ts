@@ -39,7 +39,10 @@ export class TranscriptionService {
     try {
       result = await this.stt.transcribe({
         audio: audio.buffer,
-        mimeType: audio.mimetype,
+        // Expo records HIGH_QUALITY takes as an MPEG-4 container with an .m4a
+        // extension. Some clients label it audio/m4a, which isn't a standard
+        // MIME and can be rejected by the upstream decoder.
+        mimeType: normalizeAudioMime(audio),
         filename: audio.originalname || 'recording.m4a',
         language: TRANSCRIPTION_LANGUAGE,
         contextBias,
@@ -62,6 +65,11 @@ export class TranscriptionService {
 function isAcceptedAudio(audio: UploadedAudio): boolean {
   const extension = audio.originalname.split('.').pop()?.toLowerCase() ?? '';
   return ACCEPTED_MIME_TYPES.has(audio.mimetype.toLowerCase()) || ACCEPTED_EXTENSIONS.has(extension);
+}
+
+function normalizeAudioMime(audio: UploadedAudio): string {
+  const extension = audio.originalname.split('.').pop()?.toLowerCase() ?? '';
+  return extension === 'm4a' ? 'audio/mp4' : audio.mimetype;
 }
 
 /**

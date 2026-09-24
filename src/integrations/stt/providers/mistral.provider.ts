@@ -33,6 +33,7 @@ export class MistralSttProvider implements SttProvider {
     }
     // Multi-word terms use underscores instead of spaces, per Mistral's context-biasing format.
     for (const term of (options.contextBias ?? []).slice(0, MAX_CONTEXT_BIAS_TERMS)) {
+      // Multipart arrays are represented as repeated fields by Mistral's API.
       form.append('context_bias', term.trim().replace(/\s+/g, '_'));
     }
 

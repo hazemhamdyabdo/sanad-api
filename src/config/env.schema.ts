@@ -19,6 +19,9 @@ export const envSchema = z.object({
   LLM_PROVIDER: z.enum(['mistral', 'fake']).default('fake'),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default('mistral-small-latest'),
+  // Turning a finished section's chat into a card. mistral-small returned [] for real, clearly stated
+  // jobs/degrees in most attempts; mistral-medium didn't once, and the call is short so cost stays low.
+  AI_EXTRACTION_MODEL: z.string().default('mistral-medium-latest'),
   // Speech-to-text. Reuses AI_API_KEY — same vendor account as the LLM.
   STT_PROVIDER: z.enum(['mistral', 'fake']).default('fake'),
   STT_MODEL: z.string().default('voxtral-mini-latest'),
