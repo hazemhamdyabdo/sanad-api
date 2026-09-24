@@ -29,4 +29,6 @@ export const aiConfig = registerAs('ai', () => ({
   llmProvider: env.LLM_PROVIDER,
   apiKey: env.AI_API_KEY,
   model: env.AI_MODEL,
+  sttProvider: env.STT_PROVIDER,
+  sttModel: env.STT_MODEL,
 }));

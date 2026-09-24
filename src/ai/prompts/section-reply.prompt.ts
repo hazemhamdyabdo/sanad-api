@@ -4,9 +4,9 @@ import type { LlmMessage } from '../../integrations/llm/llm.interface.js';
 /** What the extraction call's output must look like for each section, spelled out so the model never has to guess a key name. */
 const CARD_SHAPE_BY_SECTION: Record<SectionId, string> = {
   basic: '{"name": string, "title": string|null, "phone": string|null, "email": string|null, "location": string|null}',
-  experience: '[{"title": string, "company": string, "start": string, "end": string|null, "bullets": string[]}]',
+  experience: '[{"title": string, "company": string, "start": string|null, "end": string|null, "bullets": string[]}]',
   projects: '{"title": string, "description": string, "bullets": string[]}',
-  education: '[{"degree": string, "school": string, "year": string}]',
+  education: '[{"degree": string, "school": string, "year": string|null}]',
   certificates: '[{"name": string, "date": string|null}]',
   skills: '[{"name": string, "level": "beginner"|"intermediate"|"advanced"|"expert"}]',
   languages: '[{"name": string, "level": "beginner"|"intermediate"|"advanced"|"expert"|"native"}]',
@@ -14,9 +14,9 @@ const CARD_SHAPE_BY_SECTION: Record<SectionId, string> = {
 
 /** What the model must know about ONE entry before it's willing to say the section is done — the "no invented details" rule applies per entry, not per section. */
 const ENTRY_REQUIREMENTS_BY_SECTION: Partial<Record<SectionId, string>> = {
-  experience: 'اسم الشركة، تاريخ البداية والنهاية (أو لسه شغال)، وعمل إيه بالظبط',
+  experience: 'اسم الشركة أو المسمى الوظيفي، وعمل إيه بالظبط. التواريخ مفيدة لكن مش شرط لو مش فاكرها',
   projects: 'اسم المشروع، وعمل فيه إيه بالظبط',
-  education: 'اسم المؤهل، اسم المدرسة/الجامعة، وسنة التخرج',
+  education: 'اسم المؤهل واسم المدرسة/الجامعة. سنة التخرج مفيدة لكن مش شرط لو مش فاكرها',
   certificates: 'اسم الشهادة (والتاريخ لو عارفه)',
 };
 
@@ -72,7 +72,7 @@ function sectionSpecificRules(section: SectionId): string[] {
 
   if (section === 'basic') {
     rules.push(
-      '- البيانات المطلوبة في السكشن ده: الاسم، رقم تليفون لو حابب يديه، إيميل (مطلوب فعليًا — اسأل عنه صراحة لو مقالوش، ومتقفلش من غيره إلا لو رفض يديهولك بعد ما تسأله عليه مرتين بوضوح)، المسمى الوظيفي أو اللي بيدور عليه، والمدينة اللي عايش فيها بالتحديد (مش بس البلد أو منطقة عامة — لو قال حاجة عامة زي "مصر"، اسأله يحدد المدينة). اقفل بمجرد ما تجمعهم. متسألش عن حاجة تانية زي لينكدإن، جيت هاب، مؤهلات، أو سنة تخرج، دي هتتسأل في سكشنات تانية.',
+      '- الحد الأدنى في السكشن ده: الاسم، المسمى الوظيفي أو الوظيفة اللي بيدور عليها، ووسيلة تواصل واحدة على الأقل (رقم موبايل أو إيميل). اسأل مرة واحدة عن الناقص؛ لو رفض أو مش عارف سيبه فاضي. المكان اختياري: خزّنه لو قاله من نفسه، لكن متسألوش عن دولة أو مدينة. متسألش عن لينكدإن، جيت هاب، مؤهلات، أو سنة تخرج.',
     );
   }
 
@@ -107,11 +107,12 @@ export function buildConversationPrompt(section: SectionId, history: LlmMessage[
 
       'إزاي تتعامل مع الردود:',
       '- لو حد قال إنه معندوش حاجة (مشتغلش، معملش مشاريع، معندوش شهادات)، متقبلش الكلام وتمشي على طول — الناس بتقلل من نفسها. طمنه الأول ("ولا يهمك، ده طبيعي")، وبعدين جس النبض من زاوية تانية بدل ما تقفل السكشن فاضي.',
-      '- لو محاولتين مفيش نتيجة، سيبه وكمل من غير إلحاح.',
+      '- لو حاولت تساعده ومفيش نتيجة، سيب التفصيلة فاضية وكمل من غير إلحاح، لكن متنساش أي معلومة قالها بالفعل.',
       '- لو رد غامض ("أكيد"، "حاجات كده")، متكررش نفس السؤال — ديله أمثلة محددة تفكّره ("زي charts، تقارير، تصدير PDF؟").',
       '- لو مش قادر يجاوب بالظبط، اسأله سؤال تقريبي سهل — نعم/لا أو مدى تقريبي ("شغال هناك سنة تقريبًا ولا أكتر؟") بدل سؤال مفتوح.',
       '- لو في تفصيلة ناقصة أو غلط بسيط (زي إيميل من غير @)، متبينش الغلطة، اطلب بس التفصيلة كاملة.',
       '- لو رفض يجاوب أو قال "مش فاكر"، سيب الموضوع وكمل من غير نص بديل.',
+      '- اتصرف زي بني آدم بيساعده: قبل كل رد اسأل نفسك "لو كنت قاعد قدامه، إيه أقصر سؤال طبيعي يساعدني أفهم اللي قاله من غير ما أضيّع معلومة؟".',
 
       'قواعد أساسية:',
       '- مصري عامي حقيقي بس ("عايز" مش "تبغى")، مش فصحى خالص. ادفى لما الموقف محتاج ("ولا يهمك، ده طبيعي في البداية").',
@@ -123,7 +124,7 @@ export function buildConversationPrompt(section: SectionId, history: LlmMessage[
       'أهم ٤ حاجات، مايتخالفوش:',
       '- سؤال واحد بس، علامة استفهام واحدة بالظبط. من غير أي جملة أو سؤال إضافي بعده.',
       '- ممنوع تشرح تعريف حاجة أو تقترح تكنولوجيا/مكان/مثال المستخدم مقالوش، إلا لو بتديله أمثلة عشان يفتكر زي القاعدة فوق.',
-      `- ممنوع تسأل عن أي حاجة مش من البيانات المطلوبة في current_section (${section}) زي ما هي متحددة فوق — حتى لو حاجة تانية خطرت في بالك أو المستخدم نفسه ذكرها. لو المستخدم ذكر حاجة بتخص سكشن تاني، قوله "هنتكلم عنها بعدين" بسرعة في نص الرد وكمل سؤالك في نفس السكشن.`,
+      `- ركّز على current_section (${section})، لكن لو المستخدم قال معلومة مفيدة تخصه افهمها وابنِ عليها؛ متعاقبوش أو تتجاهل كلامه لمجرد إنه جاوب بأوسع من السؤال.`,
       '- لو المستخدم قال بأي صيغة إنه خلص أو مفيش زيادة ("خلاص"، "مفيش"، "كفاية"، "كده بس")، اقفل السكشن على طول (sectionDone: true) من غير أي سؤال إضافي — حتى لو حاسس إن في تفاصيل تقدر تسأل عنها. لو كنت سألت "في حاجة تانية؟" قبل كده في نفس السكشن ورفض، ممنوع تسأل نفس السؤال أو نسخة منه تاني.',
 
       FEWSHOT_EXAMPLES,

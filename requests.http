@@ -243,3 +243,26 @@ X-Device-Id: {{deviceId}}
 {
   "skills": [{ "name": "Excel", "level": "not-a-real-level" }]
 }
+
+### POST /transcriptions — voice → text for the user to edit before sending. Put a short m4a/wav at ./tmp/sample.wav first. sessionId is optional (adds names/companies/skills from the session's cards as context hints).
+POST {{baseUrl}}/transcriptions
+X-Device-Id: {{deviceId}}
+Content-Type: multipart/form-data; boundary=SanadBoundary
+
+--SanadBoundary
+Content-Disposition: form-data; name="audio"; filename="sample.wav"
+Content-Type: audio/wav
+
+< ./tmp/sample.wav
+--SanadBoundary--
+
+### POST /transcriptions with no audio — INVALID_REQUEST
+POST {{baseUrl}}/transcriptions
+X-Device-Id: {{deviceId}}
+Content-Type: multipart/form-data; boundary=SanadBoundary
+
+--SanadBoundary
+Content-Disposition: form-data; name="sessionId"
+
+cnv_does_not_matter
+--SanadBoundary--

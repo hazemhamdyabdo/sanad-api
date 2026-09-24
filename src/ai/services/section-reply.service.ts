@@ -13,14 +13,10 @@ import { CARD_SCHEMA_BY_SECTION, conversationReplySchema, type SectionReply } fr
 const SOFT_FALLBACK_MESSAGE = 'معلش، ممكن تقولهالي تاني؟';
 
 /**
- * Used when extraction still can't produce a card after the hard cap has already fired — the
- * section clearly has real data (it's had many turns), but it can't be turned into something valid.
- * Progress must not depend on extraction succeeding: the user is told plainly, in the assistant's
- * voice, that this one will be revisited, and the conversation moves on rather than repeating the
- * same failed attempt forever.
+ * Extraction failure must not make the user repeat useful data. Their full transcript is already
+ * persisted; a short closing answer on the next turn lets extraction run over it again.
  */
-const SKIP_INCOMPLETE_MESSAGE = 'معلش، الموضوع ده طلع صعب شوية دلوقتي — هرجعله تاني بعدين، خلينا نكمل الباقي.';
-
+const EXTRACTION_RECOVERY_MESSAGE = 'تمام، سجلت اللي قولته. في تفصيلة تانية تحب تضيفها؟';
 const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص قبله أو بعده.';
 
 /** Reminders sent on each retry of the conversation call, escalating from a pure formatting nudge to also asking for different phrasing. */
@@ -44,26 +40,71 @@ function hasClosingIntent(userText: string): boolean {
   return trimmed.length <= MAX_MESSAGE_LENGTH_FOR_CLOSING_INTENT && CLOSING_INTENT.test(trimmed);
 }
 
-/** After this many prior "is there another?" turns in a section, close it automatically rather than risk asking forever. */
-const MAX_ASSISTANT_TURNS_BEFORE_FORCED_CLOSE = 4;
-
 const NEUTRAL_CLOSING_MESSAGE = 'تمام، خلصنا القسم ده.';
 
 /**
- * Whether `basic` can close without an email or a location is decided in code, not left to the
- * model's own judgment every turn — the same reasoning as the closing-intent/hard-cap logic above.
- * A missing field is only accepted once the model has already asked about it this many times
- * (detected by scanning its own prior messages for the relevant keyword) — matching "closes without
- * it only after the user has been asked and declined twice", not on the first pass.
+ * Whether a section can close with a required field still missing is decided in code, not left to
+ * the model's own judgment every turn — the same reasoning as the closing-intent/hard-cap logic
+ * above. A rule is "satisfied" once ANY of its `fields` is non-empty on the extracted card (used for
+ * "phone or email — at least one"); otherwise the section is held open and `ask` (a fixed, varied-per-
+ * field question) is forced as this turn's message instead of whatever the model produced.
+ *
+ * Detecting the model's own *spontaneous* phrasing of the same question reliably is not realistic —
+ * Egyptian colloquial has too many ways to ask "what's your job title?" to pattern-match. So `mention`
+ * only has to guarantee one thing: it MUST match `ask`'s own text (asserted below), so that once this
+ * rule has forced its own canned question, the next turn's count reliably includes it — guaranteeing
+ * the section always gets past a missing field after `REQUIRED_FIELD_ASK_LIMIT` forced ask, rather
+ * than looping on it forever. It's fine (and expected) if the model happened to ask about the same
+ * thing in its own words first — that just means the canned question shows up starting one turn
+ * later than the user's very first "I don't know" on the topic, not that it never arrives.
+ *
+ * Only object-shaped cards need this: the array-shaped sections (experience, education, ...) already
+ * have their truly-required fields (company, school, ...) as non-nullable in `CARD_SCHEMA_BY_SECTION`
+ * itself, so extraction can't produce a null there in the first place — the fields left nullable on
+ * those (e.g. an ongoing job's `end`, an unknown certificate `date`) are genuinely optional, not
+ * missing data to chase.
  */
-const REQUIRED_BASIC_FIELD_ASK_LIMIT = 2;
-const EMAIL_MENTION = /إيميل|ايميل|email/i;
-const LOCATION_MENTION = /مدينة|location/i;
-const ASK_EMAIL_MESSAGE = 'طب ممكن آخد إيميلك كمان؟';
-const ASK_LOCATION_MESSAGE = 'وإنت عايش في أي مدينة بالظبط؟';
+const REQUIRED_FIELD_ASK_LIMIT = 1;
+
+interface RequiredFieldRule {
+  /** Satisfied once any one of these keys is non-empty on the card. */
+  fields: string[];
+  ask: string;
+  /** Must match `ask` itself — see the block comment above. */
+  mention: RegExp;
+}
+
+const REQUIRED_FIELDS_BY_SECTION: Partial<Record<SectionId, RequiredFieldRule[]>> = {
+  basic: [
+    { fields: ['title'], ask: 'طب إيه المسمى الوظيفي بتاعك، أو الوظيفة اللي بتدور عليها؟', mention: /المسمى الوظيفي/i },
+    { fields: ['phone', 'email'], ask: 'ممكن آخد رقم موبايلك أو إيميلك؟', mention: /رقم موبايلك أو إيميلك/i },
+  ],
+};
+
+for (const rules of Object.values(REQUIRED_FIELDS_BY_SECTION)) {
+  for (const rule of rules ?? []) {
+    if (!rule.mention.test(rule.ask)) {
+      throw new Error(`RequiredFieldRule misconfigured: mention pattern ${rule.mention} doesn't match its own ask text "${rule.ask}".`);
+    }
+  }
+}
 
 function countAssistantMentions(history: LlmMessage[], pattern: RegExp): number {
   return history.filter((entry) => entry.role === 'assistant' && pattern.test(entry.content)).length;
+}
+
+/** The first unmet rule (if any) whose missing field hasn't already been asked about once. */
+function findUnmetRequiredField(rules: RequiredFieldRule[], card: Record<string, unknown>, history: LlmMessage[]): RequiredFieldRule | null {
+  for (const rule of rules) {
+    const satisfied = rule.fields.some((field) => !!card[field]);
+    if (satisfied) {
+      continue;
+    }
+    if (countAssistantMentions(history, rule.mention) < REQUIRED_FIELD_ASK_LIMIT) {
+      return rule;
+    }
+  }
+  return null;
 }
 
 /**
@@ -171,20 +212,13 @@ export class SectionReplyService {
     const hasNoExperience = section === 'experience' && convOutcome.data.hasNoExperience;
     let sectionDone = convOutcome.data.sectionDone;
     let finalMessage = message;
-    let skippedIncomplete = false;
+    const skippedIncomplete = false;
 
-    // Closing a section is decided in code, not left entirely to the model: a user who's clearly
-    // said "خلاص"/"مفيش" should close on the spot, and a section that's already asked "another
-    // one?" this many times closes automatically rather than risk looping forever on a small
-    // model that doesn't reliably recognize its own closing signals turn after turn.
-    const priorAssistantTurns = history.filter((entry) => entry.role === 'assistant').length;
-    const hardCapped = !hasNoExperience && priorAssistantTurns >= MAX_ASSISTANT_TURNS_BEFORE_FORCED_CLOSE;
-    const closingIntentFired = !hasNoExperience && !hardCapped && hasClosingIntent(userText);
+    // An explicit short "خلاص" is safe to recognize in code. Turn counts are not: a useful answer
+    // can arrive on any turn, so a budget must never close or discard a section.
+    const closingIntentFired = !hasNoExperience && hasClosingIntent(userText);
 
-    if (hardCapped) {
-      this.logger.warn(`Hard cap reached (${priorAssistantTurns} prior turns) — forcing sectionDone: true (section: ${section}).`);
-      sectionDone = true;
-    } else if (closingIntentFired) {
+    if (closingIntentFired) {
       if (!sectionDone) {
         this.logger.warn(`User signaled closing intent ("${userText}") — overriding sectionDone to true (section: ${section}).`);
       }
@@ -192,7 +226,7 @@ export class SectionReplyService {
     }
 
     if (sectionDone && !hasNoExperience && /[؟?]/.test(finalMessage)) {
-      if (hardCapped || closingIntentFired) {
+      if (closingIntentFired) {
         // The close is forced regardless of whether the model still wants to ask something —
         // dropping the trailing question is what keeps a card from appearing next to an
         // unanswerable one.
@@ -219,23 +253,9 @@ export class SectionReplyService {
       card = await this.extractCard(section, fullHistory, closingMessageOnly);
 
       if (card === null) {
-        if (hardCapped) {
-          // The hard cap already fired once and extraction still can't produce a card — re-asking
-          // would just repeat this exact failure forever. Progress must not depend on extraction
-          // succeeding: the section is left unconfirmed and the conversation moves on, rather than
-          // the user being stuck repeating themselves with no way forward.
-          this.logger.warn(`Extraction still failing after the hard cap (section: ${section}) — moving on without confirming this section.`);
-          skippedIncomplete = true;
-          finalMessage = SKIP_INCOMPLETE_MESSAGE;
-        } else {
-          // Extraction never produced anything usable — never show an empty or broken card. Falling
-          // back to "not done yet" means the conversation just continues naturally instead of the
-          // user seeing a confirm/edit card with nothing in it. The message that was about to go out
-          // (often "تمام، خلصنا القسم ده" from the forced-close path) is now a lie — the section didn't
-          // close — so it's replaced with the same honest, in-character prompt used for total call
-          // failure.
-          finalMessage = SOFT_FALLBACK_MESSAGE;
-        }
+        // Never advance past information we failed to structure. The full transcript is persisted,
+        // so a later retry can recover it without asking the user to repeat their whole story.
+        finalMessage = EXTRACTION_RECOVERY_MESSAGE;
         sectionDone = false;
       } else if (Array.isArray(card) && Array.isArray(previousBestCard) && card.length < previousBestCard.length) {
         // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
@@ -243,21 +263,14 @@ export class SectionReplyService {
         // very likely the model dropping entries, not the user retracting them — keep the larger one.
         this.logger.warn(`New extraction (${card.length} entries) is smaller than a prior one (${previousBestCard.length}) for section ${section} — keeping the larger one.`);
         card = previousBestCard;
-      } else if (section === 'basic' && card && !Array.isArray(card) && !hardCapped) {
-        const basic = card as Record<string, unknown>;
-        const emailAsks = countAssistantMentions(history, EMAIL_MENTION);
-        const locationAsks = countAssistantMentions(history, LOCATION_MENTION);
-
-        if (!basic.email && emailAsks < REQUIRED_BASIC_FIELD_ASK_LIMIT) {
-          this.logger.warn(`Basic section would close without an email after only ${emailAsks} prior ask(s) — forcing one more turn.`);
+      } else if (!Array.isArray(card)) {
+        const rules = REQUIRED_FIELDS_BY_SECTION[section];
+        const unmet = rules ? findUnmetRequiredField(rules, card as Record<string, unknown>, history) : null;
+        if (unmet) {
+          this.logger.warn(`${section} would close missing a required field (one of: ${unmet.fields.join('/')}) — forcing one more turn.`);
           sectionDone = false;
           card = null;
-          finalMessage = ASK_EMAIL_MESSAGE;
-        } else if (!basic.location && locationAsks < REQUIRED_BASIC_FIELD_ASK_LIMIT) {
-          this.logger.warn(`Basic section would close without a location after only ${locationAsks} prior ask(s) — forcing one more turn.`);
-          sectionDone = false;
-          card = null;
-          finalMessage = ASK_LOCATION_MESSAGE;
+          finalMessage = unmet.ask;
         }
       }
     }

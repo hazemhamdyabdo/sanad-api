@@ -166,6 +166,15 @@ export class ConversationService {
     return cards[cards.length - 1] ?? null;
   }
 
+  /** Every section card this session has produced (confirmed or not), oldest first — ownership-checked, any session status. */
+  async getSectionCardsForDevice(sessionId: string, deviceId: string): Promise<Array<Record<string, unknown> | unknown[]>> {
+    const session = await this.getOwnedSession(sessionId, deviceId);
+    const messages = await this.conversationRepository.findMessagesBySessionId(session.id);
+    return messages
+      .filter((message) => message.type === 'section_card' && message.card !== null)
+      .map((message) => message.card as Record<string, unknown> | unknown[]);
+  }
+
   appendUserMessage(session: ConversationSession, dto: SendMessageDto): Promise<Message> {
     return this.conversationRepository.createMessage({
       id: generateId('msg'),

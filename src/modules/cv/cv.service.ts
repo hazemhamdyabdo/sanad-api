@@ -8,6 +8,7 @@ import { ARRAY_SECTIONS, toCvResponseDto, type CvResponseDto } from './dto/cv-re
 import type { PatchCvDto } from './dto/patch-cv.dto.js';
 import type { CvContact } from './entities/cv.entity.js';
 import { cvPatchSchema } from './schemas/cv-patch.schema.js';
+import { CvPdfRenderer } from '../../integrations/pdf/cv-pdf.renderer.js';
 
 export interface ConfirmSectionResult {
   cvId: string;
@@ -24,7 +25,16 @@ interface BasicCardShape {
 
 @Injectable()
 export class CvService {
-  constructor(private readonly cvRepository: CvRepository) {}
+  constructor(
+    private readonly cvRepository: CvRepository,
+    private readonly cvPdfRenderer: CvPdfRenderer,
+  ) {}
+
+  async exportPdf(deviceId: string): Promise<{ file: Buffer; filename: string }> {
+    const cv = await this.getForDevice(deviceId);
+    const safeName = (cv.name ?? 'CV').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'CV';
+    return { file: this.cvPdfRenderer.render(cv), filename: `${safeName}-CV.pdf` };
+  }
 
   existsForDevice(deviceId: string): Promise<boolean> {
     return this.cvRepository.existsForDevice(deviceId);
@@ -52,6 +62,12 @@ export class CvService {
   ): Promise<ConfirmSectionResult> {
     let cv = existingCvId ? await this.cvRepository.findById(existingCvId, manager) : null;
     if (!cv) {
+      // A device can already have a CV from an older completed conversation while a newly-created
+      // session still has `cvId: null`. Reuse that one-per-device row instead of inserting a second
+      // row and violating IDX_cvs_deviceId.
+      cv = await this.cvRepository.findByDeviceId(deviceId, manager);
+    }
+    if (!cv) {
       cv = await this.cvRepository.createCv(
         {
           id: generateId('cv'),
@@ -65,18 +81,16 @@ export class CvService {
         },
         manager,
       );
+    } else if (!existingCvId && section === 'basic') {
+      // This is the first confirmation of a fresh build over an older CV. Clear the old section
+      // rows atomically so unvisited sections can never leak into the newly-built document.
+      await this.cvRepository.deleteSectionsByCvId(cv.id, manager);
+      cv.confirmedSections = [];
+      cv.isComplete = false;
+      cv.summary = null;
     }
 
-    await this.cvRepository.createSection(
-      {
-        id: generateId('sec'),
-        cvId: cv.id,
-        section,
-        content,
-        confirmedAt: new Date(),
-      },
-      manager,
-    );
+    await this.cvRepository.upsertSection(cv.id, section, content, manager);
 
     if (section === 'basic' && !Array.isArray(content)) {
       const basic = content as BasicCardShape;

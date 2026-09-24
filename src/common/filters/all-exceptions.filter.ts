@@ -15,6 +15,12 @@ const GENERIC_BY_STATUS: Record<number, ErrorBody> = {
     message: 'الحاجة اللي بتدور عليها مش موجودة',
     retryable: false,
   },
+  // Multer's size limit (e.g. an audio upload over 10MB) surfaces as a 413.
+  [HttpStatus.PAYLOAD_TOO_LARGE]: {
+    code: 'UNSUPPORTED_FILE',
+    message: 'الملف أكبر من الحجم المسموح',
+    retryable: false,
+  },
   [HttpStatus.TOO_MANY_REQUESTS]: {
     code: 'RATE_LIMITED',
     message: 'في طلبات كتير دلوقتي، استنى شوية وجرب تاني',

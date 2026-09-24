@@ -19,8 +19,8 @@ export class CvRepository {
     return cv !== null;
   }
 
-  findByDeviceId(deviceId: string): Promise<Cv | null> {
-    return this.cvRepo.findOneBy({ deviceId });
+  findByDeviceId(deviceId: string, manager?: EntityManager): Promise<Cv | null> {
+    return this.scoped(this.cvRepo, manager).findOneBy({ deviceId });
   }
 
   async deleteById(id: string, manager?: EntityManager): Promise<void> {
@@ -43,6 +43,10 @@ export class CvRepository {
     return this.scoped(this.cvSectionRepo, manager).save(section);
   }
 
+  async deleteSectionsByCvId(cvId: string, manager?: EntityManager): Promise<void> {
+    await this.scoped(this.cvSectionRepo, manager).delete({ cvId });
+  }
+
   findSectionsByCvId(cvId: string): Promise<CvSection[]> {
     return this.cvSectionRepo.find({ where: { cvId } });
   }
@@ -53,14 +57,15 @@ export class CvRepository {
    * the review screen — this updates the existing row in place instead of violating the
    * `(cvId, section)` unique index with a second insert.
    */
-  async upsertSection(cvId: string, section: SectionId, content: unknown): Promise<void> {
-    const existing = await this.cvSectionRepo.findOneBy({ cvId, section });
+  async upsertSection(cvId: string, section: SectionId, content: unknown, manager?: EntityManager): Promise<void> {
+    const repository = this.scoped(this.cvSectionRepo, manager);
+    const existing = await repository.findOneBy({ cvId, section });
     if (existing) {
       existing.content = content;
       existing.confirmedAt = new Date();
-      await this.cvSectionRepo.save(existing);
+      await repository.save(existing);
     } else {
-      await this.cvSectionRepo.save({ id: generateId('sec'), cvId, section, content, confirmedAt: new Date() });
+      await repository.save({ id: generateId('sec'), cvId, section, content, confirmedAt: new Date() });
     }
   }
 

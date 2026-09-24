@@ -13,6 +13,7 @@ import { LlmDebugController } from './llm-debug.controller.js';
 import { ConversationModule } from './modules/conversation/index.js';
 import { CvModule } from './modules/cv/index.js';
 import { DeviceModule } from './modules/device/index.js';
+import { TranscriptionModule } from './modules/transcription/index.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { DeviceModule } from './modules/device/index.js';
     DeviceModule,
     ConversationModule,
     CvModule,
+    TranscriptionModule,
     LlmModule,
   ],
   controllers: [AppController, LlmDebugController],

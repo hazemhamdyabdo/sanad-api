@@ -19,12 +19,20 @@ export const envSchema = z.object({
   LLM_PROVIDER: z.enum(['mistral', 'fake']).default('fake'),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default('mistral-small-latest'),
+  // Speech-to-text. Reuses AI_API_KEY — same vendor account as the LLM.
+  STT_PROVIDER: z.enum(['mistral', 'fake']).default('fake'),
+  STT_MODEL: z.string().default('voxtral-mini-latest'),
 });
 
-const envSchemaWithCrossFieldRules = envSchema.refine((env) => env.LLM_PROVIDER !== 'mistral' || !!env.AI_API_KEY, {
-  message: 'AI_API_KEY is required when LLM_PROVIDER=mistral',
-  path: ['AI_API_KEY'],
-});
+const envSchemaWithCrossFieldRules = envSchema
+  .refine((env) => env.LLM_PROVIDER !== 'mistral' || !!env.AI_API_KEY, {
+    message: 'AI_API_KEY is required when LLM_PROVIDER=mistral',
+    path: ['AI_API_KEY'],
+  })
+  .refine((env) => env.STT_PROVIDER !== 'mistral' || !!env.AI_API_KEY, {
+    message: 'AI_API_KEY is required when STT_PROVIDER=mistral',
+    path: ['AI_API_KEY'],
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

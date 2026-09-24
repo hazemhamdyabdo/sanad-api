@@ -22,7 +22,7 @@ const experienceCardSchema = z.array(
   z.object({
     title: text(),
     company: text(),
-    start: text(),
+    start: text().nullable(),
     end: text().nullable(),
     bullets: z.array(text()).min(1),
   }),
@@ -45,7 +45,7 @@ const educationCardSchema = z.array(
   z.object({
     degree: text(),
     school: text(),
-    year: text(),
+    year: text().nullable(),
   }),
 );
 
