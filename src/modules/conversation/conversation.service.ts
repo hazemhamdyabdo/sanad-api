@@ -194,6 +194,25 @@ export class ConversationService {
     await this.conversationRepository.saveSession(session);
   }
 
+  /**
+   * Used when a section's data repeatedly fails to extract despite the user having provided real
+   * content — progress must not depend on extraction succeeding. The section is left `pending`
+   * (never confirmed, no CvSection row) and the conversation moves on to the next one; the CV review
+   * screen is where the user finishes it later. If it was the last section, the session itself is
+   * marked completed even though this one was never confirmed — `Cv.isComplete` only ever becomes
+   * true via an explicit confirm, so it correctly stays false until the user goes back and fills it
+   * in, while the conversation flow itself still reaches an end either way.
+   */
+  async skipCurrentSection(session: ConversationSession): Promise<void> {
+    const index = session.sections.findIndex((section) => section.id === session.currentSection);
+    const nextSection = session.sections[index + 1]?.id ?? null;
+    session.currentSection = nextSection;
+    if (nextSection === null) {
+      session.status = 'completed';
+    }
+    await this.conversationRepository.saveSession(session);
+  }
+
   isLastSection(session: ConversationSession, sectionId: SectionId): boolean {
     const index = session.sections.findIndex((section) => section.id === sectionId);
     return index !== -1 && index === session.sections.length - 1;

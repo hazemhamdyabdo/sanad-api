@@ -12,6 +12,15 @@ import { CARD_SCHEMA_BY_SECTION, conversationReplySchema, type SectionReply } fr
  */
 const SOFT_FALLBACK_MESSAGE = 'معلش، ممكن تقولهالي تاني؟';
 
+/**
+ * Used when extraction still can't produce a card after the hard cap has already fired — the
+ * section clearly has real data (it's had many turns), but it can't be turned into something valid.
+ * Progress must not depend on extraction succeeding: the user is told plainly, in the assistant's
+ * voice, that this one will be revisited, and the conversation moves on rather than repeating the
+ * same failed attempt forever.
+ */
+const SKIP_INCOMPLETE_MESSAGE = 'معلش، الموضوع ده طلع صعب شوية دلوقتي — هرجعله تاني بعدين، خلينا نكمل الباقي.';
+
 const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص قبله أو بعده.';
 
 /** Reminders sent on each retry of the conversation call, escalating from a pure formatting nudge to also asking for different phrasing. */
@@ -138,13 +147,14 @@ export class SectionReplyService {
 
     if (!convOutcome.success) {
       this.logger.warn(`Conversation call failed after all retries (section: ${section}) — falling back to a soft in-character message.`);
-      return { message: SOFT_FALLBACK_MESSAGE, section, sectionDone: false, hasNoExperience: false, card: null };
+      return { message: SOFT_FALLBACK_MESSAGE, section, sectionDone: false, hasNoExperience: false, card: null, skippedIncomplete: false };
     }
 
     const message = insertArabicLatinBoundarySpace(convOutcome.data.message);
     const hasNoExperience = section === 'experience' && convOutcome.data.hasNoExperience;
     let sectionDone = convOutcome.data.sectionDone;
     let finalMessage = message;
+    let skippedIncomplete = false;
 
     // Closing a section is decided in code, not left entirely to the model: a user who's clearly
     // said "خلاص"/"مفيش" should close on the spot, and a section that's already asked "another
@@ -192,16 +202,24 @@ export class SectionReplyService {
       card = await this.extractCard(section, fullHistory, closingMessageOnly);
 
       if (card === null) {
-        // Extraction never produced anything usable — never show an empty or broken card. Falling
-        // back to "not done yet" means the conversation just continues naturally instead of the
-        // user seeing a confirm/edit card with nothing in it. The message that was about to go out
-        // (often "تمام، خلصنا القسم ده" from the forced-close path) is now a lie — the section didn't
-        // close — so it's replaced with the same honest, in-character prompt used for total call
-        // failure, rather than leaving the user staring at a false "done" that never progresses,
-        // especially once the hard cap has fired and would otherwise repeat this every turn.
-        this.logger.warn(`Extraction produced no usable card (section: ${section}) — not closing the section this turn.`);
+        if (hardCapped) {
+          // The hard cap already fired once and extraction still can't produce a card — re-asking
+          // would just repeat this exact failure forever. Progress must not depend on extraction
+          // succeeding: the section is left unconfirmed and the conversation moves on, rather than
+          // the user being stuck repeating themselves with no way forward.
+          this.logger.warn(`Extraction still failing after the hard cap (section: ${section}) — moving on without confirming this section.`);
+          skippedIncomplete = true;
+          finalMessage = SKIP_INCOMPLETE_MESSAGE;
+        } else {
+          // Extraction never produced anything usable — never show an empty or broken card. Falling
+          // back to "not done yet" means the conversation just continues naturally instead of the
+          // user seeing a confirm/edit card with nothing in it. The message that was about to go out
+          // (often "تمام، خلصنا القسم ده" from the forced-close path) is now a lie — the section didn't
+          // close — so it's replaced with the same honest, in-character prompt used for total call
+          // failure.
+          finalMessage = SOFT_FALLBACK_MESSAGE;
+        }
         sectionDone = false;
-        finalMessage = SOFT_FALLBACK_MESSAGE;
       } else if (Array.isArray(card) && Array.isArray(previousBestCard) && card.length < previousBestCard.length) {
         // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
         // came back with fewer entries than the best one already produced for this section, that's
@@ -211,7 +229,7 @@ export class SectionReplyService {
       }
     }
 
-    return { message: finalMessage, section, sectionDone, hasNoExperience, card };
+    return { message: finalMessage, section, sectionDone, hasNoExperience, card, skippedIncomplete };
   }
 
   /**

@@ -113,4 +113,11 @@ export interface SectionReply {
   sectionDone: boolean;
   hasNoExperience: boolean;
   card: Record<string, unknown> | unknown[] | null;
+  /**
+   * True when extraction kept failing even after the hard cap on retries — the section clearly had
+   * real data, but it couldn't be turned into a valid card. Rather than block the conversation
+   * forever, the caller moves on and leaves this section unconfirmed for the user to finish later
+   * from the CV review screen.
+   */
+  skippedIncomplete: boolean;
 }
