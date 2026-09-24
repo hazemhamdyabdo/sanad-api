@@ -1,11 +1,22 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { AppError } from '../../common/errors/app-error.js';
 import type { SectionId } from '../../common/types/contract.js';
 import { LLM_PROVIDER, type LlmMessage, type LlmProvider } from '../../integrations/llm/llm.interface.js';
 import { buildConversationPrompt, buildExtractionPrompt } from '../prompts/section-reply.prompt.js';
 import { CARD_SCHEMA_BY_SECTION, conversationReplySchema, type SectionReply } from '../schemas/section-reply.schema.js';
 
+/**
+ * A technical failure talking to the model is never something the user caused, and they must
+ * never see it spelled out — no error bubble, no "الرد مش بالشكل المتوقع". When every retry is
+ * exhausted, the assistant just asks to hear it again, in its own voice, like a person who didn't
+ * quite catch that.
+ */
+const SOFT_FALLBACK_MESSAGE = 'معلش، ممكن تقولهالي تاني؟';
+
 const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص قبله أو بعده.';
+
+/** Reminders sent on each retry of the conversation call, escalating from a pure formatting nudge to also asking for different phrasing. */
+const CONVERSATION_RETRY_REMINDERS = [JSON_ONLY_REMINDER, 'حاول تاني بصياغة سؤال مختلفة، ورد بكائن JSON بس زي ما اتطلب من غير أي نص تاني.'];
+
 const EMPTY_ARRAY_REMINDER =
   'راجع المحادثة تاني بالكامل، من أول رسالة للآخر — هل ذكر المستخدم أي عنصر فعلي في أي رسالة من رسايله في أي وقت؟ لو أيوه، لازم يتحط في الـ array حتى لو آخر رسالة بتاعته بتقول "مفيش" أو "خلاص". رجع array فاضي [] بس لو مفيش أي عنصر اتقال فعلاً من الأول للآخر.';
 
@@ -26,6 +37,25 @@ function hasClosingIntent(userText: string): boolean {
 
 /** After this many prior "is there another?" turns in a section, close it automatically rather than risk asking forever. */
 const MAX_ASSISTANT_TURNS_BEFORE_FORCED_CLOSE = 4;
+
+const NEUTRAL_CLOSING_MESSAGE = 'تمام، خلصنا القسم ده.';
+
+/**
+ * A section forced closed by the hard cap or a closing-intent match still has to drop any
+ * trailing question — showing a card next to an unanswerable question is exactly the confusing
+ * state the section_card + still-asking bug produced. Sentences are split on `.`/`!` (the shape
+ * the model's own closing acknowledgments take, e.g. "تمام، خلصنا خبراتك. طب إيه وظيفتك هناك؟");
+ * whichever sentence contains a question mark is dropped and the rest is kept. If nothing salvageable
+ * remains (the whole message was just the question), a neutral closing line is used instead.
+ */
+function sanitizeForcedCloseMessage(message: string): string {
+  if (!/[؟?]/.test(message)) {
+    return message;
+  }
+  const sentences = message.split(/(?<=[.!])\s*/).filter((sentence) => sentence.trim().length > 0);
+  const withoutQuestion = sentences.filter((sentence) => !/[؟?]/.test(sentence)).join(' ').trim();
+  return withoutQuestion.length > 5 ? withoutQuestion : NEUTRAL_CLOSING_MESSAGE;
+}
 
 function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
@@ -53,8 +83,8 @@ function extractJsonValue(raw: string): string {
  * single stub entry with every field null instead — a placeholder for "no
  * entry" rather than an actual entry. Dropping such stubs before validation
  * means that slip degrades to an empty array instead of failing the whole
- * turn with AI_UNAVAILABLE. Only array-shaped output is affected; `parsed`
- * is left untouched otherwise.
+ * turn. Only array-shaped output is affected; `parsed` is left untouched
+ * otherwise.
  */
 function dropAllNullEntries(parsed: unknown): unknown {
   if (!Array.isArray(parsed)) {
@@ -79,6 +109,8 @@ function insertArabicLatinBoundarySpace(text: string): string {
   return text.replace(ARABIC_THEN_LATIN, '$1 $2').replace(LATIN_THEN_ARABIC, '$1 $2');
 }
 
+type RetryOutcome<T> = { success: true; data: T } | { success: false };
+
 /**
  * Two LLM calls per turn instead of one. A single prompt that both holds a
  * natural conversation AND extracts structured per-section data overloads a
@@ -87,6 +119,12 @@ function insertArabicLatinBoundarySpace(text: string): string {
  * call (short, behavior-focused) decides what to say and whether the
  * section is done; the extraction call (short, format-focused) runs only
  * once it's done, reading the same section transcript to produce the card.
+ *
+ * Neither call throws for a bad model output any more — an invalid or
+ * unparseable reply is retried in the background, and if every retry is
+ * exhausted, the caller degrades gracefully (a soft in-character message for
+ * the conversation call, no card at all for extraction) instead of
+ * surfacing a technical error to the user.
  */
 @Injectable()
 export class SectionReplyService {
@@ -96,35 +134,50 @@ export class SectionReplyService {
 
   async generate(section: SectionId, history: LlmMessage[], userText: string, previousBestCard?: Record<string, unknown> | unknown[] | null): Promise<SectionReply> {
     const convMessages = buildConversationPrompt(section, history, userText);
-    const convParsed = await this.completeJsonWithRetry(convMessages, extractJsonObject);
-    const convResult = conversationReplySchema.safeParse(convParsed);
-    if (!convResult.success) {
-      this.logger.warn(`Conversation call failed validation: ${JSON.stringify(convResult.error.issues)}`);
-      throw new AppError('AI_UNAVAILABLE', 'رد الذكاء الاصطناعي مش بالشكل المتوقع، جرب تاني', { retryable: true });
+    const convOutcome = await this.completeWithRetries(convMessages, extractJsonObject, (value) => conversationReplySchema.safeParse(value), CONVERSATION_RETRY_REMINDERS);
+
+    if (!convOutcome.success) {
+      this.logger.warn(`Conversation call failed after all retries (section: ${section}) — falling back to a soft in-character message.`);
+      return { message: SOFT_FALLBACK_MESSAGE, section, sectionDone: false, hasNoExperience: false, card: null };
     }
 
-    const message = insertArabicLatinBoundarySpace(convResult.data.message);
-    const hasNoExperience = section === 'experience' && convResult.data.hasNoExperience;
-    let sectionDone = convResult.data.sectionDone;
+    const message = insertArabicLatinBoundarySpace(convOutcome.data.message);
+    const hasNoExperience = section === 'experience' && convOutcome.data.hasNoExperience;
+    let sectionDone = convOutcome.data.sectionDone;
+    let finalMessage = message;
 
     // Closing a section is decided in code, not left entirely to the model: a user who's clearly
     // said "خلاص"/"مفيش" should close on the spot, and a section that's already asked "another
     // one?" this many times closes automatically rather than risk looping forever on a small
     // model that doesn't reliably recognize its own closing signals turn after turn.
     const priorAssistantTurns = history.filter((entry) => entry.role === 'assistant').length;
-    if (!hasNoExperience && priorAssistantTurns >= MAX_ASSISTANT_TURNS_BEFORE_FORCED_CLOSE) {
+    const hardCapped = !hasNoExperience && priorAssistantTurns >= MAX_ASSISTANT_TURNS_BEFORE_FORCED_CLOSE;
+    const closingIntentFired = !hasNoExperience && !hardCapped && hasClosingIntent(userText);
+
+    if (hardCapped) {
       this.logger.warn(`Hard cap reached (${priorAssistantTurns} prior turns) — forcing sectionDone: true (section: ${section}).`);
       sectionDone = true;
-    } else if (!hasNoExperience && hasClosingIntent(userText)) {
+    } else if (closingIntentFired) {
       if (!sectionDone) {
         this.logger.warn(`User signaled closing intent ("${userText}") — overriding sectionDone to true (section: ${section}).`);
       }
       sectionDone = true;
-    } else if (sectionDone && !hasNoExperience && /[؟?]/.test(message)) {
-      // A message that's still asking something can't also mean "this section is done" — except the
-      // hasNoExperience pivot, where the question legitimately belongs to the section being switched to.
-      this.logger.warn(`Conversation call said sectionDone: true while still asking a question (section: ${section}) — overriding to false.`);
-      sectionDone = false;
+    }
+
+    if (sectionDone && !hasNoExperience && /[؟?]/.test(finalMessage)) {
+      if (hardCapped || closingIntentFired) {
+        // The close is forced regardless of whether the model still wants to ask something —
+        // dropping the trailing question is what keeps a card from appearing next to an
+        // unanswerable one.
+        finalMessage = sanitizeForcedCloseMessage(finalMessage);
+        this.logger.warn(`Forced close still had a trailing question (section: ${section}) — message sanitized.`);
+      } else {
+        // A message that's still asking something can't also mean "this section is done" — except
+        // the hasNoExperience pivot, where the question legitimately belongs to the section being
+        // switched to.
+        this.logger.warn(`Conversation call said sectionDone: true while still asking a question (section: ${section}) — overriding to false.`);
+        sectionDone = false;
+      }
     }
 
     let card: Record<string, unknown> | unknown[] | null = null;
@@ -138,65 +191,104 @@ export class SectionReplyService {
       const closingMessageOnly = hasClosingIntent(userText) && history.length > 0;
       card = await this.extractCard(section, fullHistory, closingMessageOnly);
 
-      // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
-      // came back with fewer entries than the best one already produced for this section, that's
-      // very likely the model dropping entries, not the user retracting them — keep the larger one.
-      if (Array.isArray(card) && Array.isArray(previousBestCard) && card.length < previousBestCard.length) {
+      if (card === null) {
+        // Extraction never produced anything usable — never show an empty or broken card. Falling
+        // back to "not done yet" means the conversation just continues naturally instead of the
+        // user seeing a confirm/edit card with nothing in it. The message that was about to go out
+        // (often "تمام، خلصنا القسم ده" from the forced-close path) is now a lie — the section didn't
+        // close — so it's replaced with the same honest, in-character prompt used for total call
+        // failure, rather than leaving the user staring at a false "done" that never progresses,
+        // especially once the hard cap has fired and would otherwise repeat this every turn.
+        this.logger.warn(`Extraction produced no usable card (section: ${section}) — not closing the section this turn.`);
+        sectionDone = false;
+        finalMessage = SOFT_FALLBACK_MESSAGE;
+      } else if (Array.isArray(card) && Array.isArray(previousBestCard) && card.length < previousBestCard.length) {
+        // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
+        // came back with fewer entries than the best one already produced for this section, that's
+        // very likely the model dropping entries, not the user retracting them — keep the larger one.
         this.logger.warn(`New extraction (${card.length} entries) is smaller than a prior one (${previousBestCard.length}) for section ${section} — keeping the larger one.`);
         card = previousBestCard;
       }
     }
 
-    return { message, section, sectionDone, hasNoExperience, card };
+    return { message: finalMessage, section, sectionDone, hasNoExperience, card };
   }
 
-  private async extractCard(section: SectionId, sectionHistory: LlmMessage[], closingMessageOnly = false): Promise<Record<string, unknown> | unknown[]> {
+  /**
+   * Returns `null` (never throws) when extraction can't produce a usable card — either every
+   * retry failed outright, or the result stayed empty after a re-check despite real content
+   * earlier in the section. Both are "don't show anything", not "show nothing and call it done".
+   */
+  private async extractCard(section: SectionId, sectionHistory: LlmMessage[], closingMessageOnly = false): Promise<Record<string, unknown> | unknown[] | null> {
     const extractionMessages = buildExtractionPrompt(section, sectionHistory, closingMessageOnly);
-    const parsed = await this.completeJsonWithRetry(extractionMessages, extractJsonValue);
-    const cleaned = dropAllNullEntries(parsed);
+    const parse = (value: unknown): { success: true; data: Record<string, unknown> | unknown[] } | { success: false; error: { issues: unknown } } => {
+      const result = CARD_SCHEMA_BY_SECTION[section].safeParse(dropAllNullEntries(value));
+      return result.success ? { success: true, data: result.data as Record<string, unknown> | unknown[] } : { success: false, error: { issues: result.error.issues } };
+    };
+
+    const outcome = await this.completeWithRetries(extractionMessages, extractJsonValue, parse, [JSON_ONLY_REMINDER]);
+    if (!outcome.success) {
+      this.logger.warn(`Extraction failed after all retries (section: ${section}).`);
+      return null;
+    }
 
     // An empty array is a legitimate answer, but also the model's most likely failure mode: it can latch
     // onto a closing "مفيش"/"خلاص" in the last message and wipe out real entries mentioned earlier in the
     // same section. Only worth double-checking when there was more than one user turn — a section closed
-    // on the very first reply was never going to have anything to lose. This has to run on the raw parsed
-    // value, before schema validation — a schema with a `.min(1)` on the array would otherwise throw before
-    // this check ever got a chance to trigger a retry.
+    // on the very first reply was never going to have anything to lose.
     const hadMultipleUserTurns = sectionHistory.filter((entry) => entry.role === 'user').length > 1;
-    if (Array.isArray(cleaned) && cleaned.length === 0 && hadMultipleUserTurns) {
+    if (Array.isArray(outcome.data) && outcome.data.length === 0 && hadMultipleUserTurns) {
       this.logger.warn(`Extraction returned an empty array after multiple user turns (section: ${section}) — re-checking once.`);
-      const recheckMessages: LlmMessage[] = [...extractionMessages, { role: 'assistant', content: JSON.stringify(parsed) }, { role: 'user', content: EMPTY_ARRAY_REMINDER }];
-      const recheckParsed = await this.completeJsonWithRetry(recheckMessages, extractJsonValue);
-      return this.parseCard(section, recheckParsed);
+      const recheckMessages: LlmMessage[] = [...extractionMessages, { role: 'assistant', content: JSON.stringify(outcome.data) }, { role: 'user', content: EMPTY_ARRAY_REMINDER }];
+      const recheckOutcome = await this.completeWithRetries(recheckMessages, extractJsonValue, parse, []);
+
+      if (!recheckOutcome.success) {
+        return null;
+      }
+      if (Array.isArray(recheckOutcome.data) && recheckOutcome.data.length === 0) {
+        // Still empty despite real content earlier in the section — this is extraction failing to
+        // find what's there, not the user having nothing. Don't confirm an empty card for it.
+        this.logger.warn(`Extraction still empty after re-check despite multiple user turns (section: ${section}) — treating as a failed extraction.`);
+        return null;
+      }
+      return recheckOutcome.data;
     }
 
-    return this.parseCard(section, parsed);
+    return outcome.data;
   }
 
-  private parseCard(section: SectionId, parsed: unknown): Record<string, unknown> | unknown[] {
-    const result = CARD_SCHEMA_BY_SECTION[section].safeParse(dropAllNullEntries(parsed));
-    if (!result.success) {
-      this.logger.warn(`Extraction call failed validation (section: ${section}): ${JSON.stringify(result.error.issues)}`);
-      throw new AppError('AI_UNAVAILABLE', 'رد الذكاء الاصطناعي مش بالشكل المتوقع، جرب تاني', { retryable: true });
-    }
-    return result.data as Record<string, unknown> | unknown[];
-  }
+  /**
+   * Runs the completion, parses it as JSON, and validates it against `validate` — retrying with
+   * each of `reminders` in turn on either a JSON-parse failure or a schema-validation failure.
+   * Never throws: total failure just returns `{ success: false }`, leaving the caller to decide
+   * how to degrade gracefully.
+   */
+  private async completeWithRetries<T>(
+    messages: LlmMessage[],
+    extract: (raw: string) => string,
+    validate: (value: unknown) => { success: true; data: T } | { success: false; error: { issues: unknown } },
+    reminders: string[],
+  ): Promise<RetryOutcome<T>> {
+    let currentMessages = messages;
 
-  /** Shared retry-once-on-bad-JSON flow used by both the conversation and extraction calls. */
-  private async completeJsonWithRetry(messages: LlmMessage[], extract: (raw: string) => string): Promise<unknown> {
-    const first = await this.complete(messages);
-    const parsed = this.tryParse(first, extract);
-    if (parsed !== undefined) {
-      return parsed;
+    for (let attempt = 0; attempt <= reminders.length; attempt++) {
+      const raw = await this.complete(currentMessages);
+      const parsed = this.tryParse(raw, extract, attempt > 0);
+
+      if (parsed !== undefined) {
+        const result = validate(parsed);
+        if (result.success) {
+          return result;
+        }
+        this.logger.warn(`Output failed validation on attempt ${attempt + 1}: ${JSON.stringify(result.error.issues)}`);
+      }
+
+      if (attempt < reminders.length) {
+        currentMessages = [...currentMessages, { role: 'assistant', content: raw }, { role: 'user', content: reminders[attempt] as string }];
+      }
     }
 
-    this.logger.warn('AI output was not valid JSON — retrying once with a JSON-only reminder.');
-    const retryMessages: LlmMessage[] = [...messages, { role: 'assistant', content: first }, { role: 'user', content: JSON_ONLY_REMINDER }];
-    const retry = await this.complete(retryMessages);
-    const retryParsed = this.tryParse(retry, extract, true);
-    if (retryParsed === undefined) {
-      throw new AppError('AI_UNAVAILABLE', 'مش قادرين نفهم رد الذكاء الاصطناعي دلوقتي، جرب تاني', { retryable: true });
-    }
-    return retryParsed;
+    return { success: false };
   }
 
   private complete(messages: LlmMessage[]): Promise<string> {
