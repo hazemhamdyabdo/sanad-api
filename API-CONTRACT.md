@@ -185,10 +185,16 @@ Response `200`:
   "status": "confirmed",
   "nextSection": "education",
   "sessionStatus": "in_progress",
-  "cvId": null
+  "cvId": null,
+  "nextMessage": { "id": "msg_13", "role": "ai", "section": "education", "type": "text", "text": "جميل. نتكلم عن تعليمك — اتخرجت في إيه ومن فين؟", "createdAt": "..." }
 }
 ```
-لما `isLast: true`: `nextSection: null`، و`sessionStatus: "completed"`، و`cvId` فيه الـ id.
+لما `isLast: true`: `nextSection: null`، و`sessionStatus: "completed"`، و`cvId` فيه الـ id، و`nextMessage` بتكون رسالة الختام (بـ `section: null`) بدل رسالة سكشن جديد:
+```json
+{ "id": "msg_20", "role": "ai", "section": null, "type": "text", "text": "مبروك! خلصنا الـ CV بتاعك 🎉 تقدر تراجعه دلوقتي وتعدل أي حاجة قبل ما تحمّله.", "createdAt": "..." }
+```
+
+`nextMessage` بتتحفظ في الـ session زي أي رسالة تانية (بترجع كمان مع `GET /conversations/:id`)، عشان الشات مايفضلش ساكت بعد التأكيد.
 
 ---
 

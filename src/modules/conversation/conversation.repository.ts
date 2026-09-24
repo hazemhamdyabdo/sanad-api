@@ -40,8 +40,8 @@ export class ConversationRepository {
     return this.messageRepo.findOneBy({ id });
   }
 
-  createMessage(message: Omit<Message, 'sequence' | 'createdAt'>): Promise<Message> {
-    return this.messageRepo.save(message);
+  createMessage(message: Omit<Message, 'sequence' | 'createdAt'>, manager?: EntityManager): Promise<Message> {
+    return this.scoped(this.messageRepo, manager).save(message);
   }
 
   /** Binds a repository to a shared transaction manager when one is given, otherwise uses the module's own connection. */

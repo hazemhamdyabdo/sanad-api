@@ -148,7 +148,9 @@ X-Device-Id: {{deviceId}}
 }
 
 ### Confirm a section — needs a real messageId from a section_card event above, and :sessionId's currentSection must equal :sectionId.
-# Response: { section, status: "confirmed", nextSection, sessionStatus, cvId } — cvId is null unless isLast: true.
+# Response: { section, status: "confirmed", nextSection, sessionStatus, cvId, nextMessage } — cvId is null unless isLast: true.
+# nextMessage is the next section's opening line (already persisted, also comes back via GET /conversations/:id);
+# when isLast: true it's the closing message instead, with section: null.
 POST {{baseUrl}}/conversations/:sessionId/sections/basic/confirm
 Content-Type: application/json
 X-Device-Id: {{deviceId}}
@@ -192,7 +194,7 @@ X-Device-Id: {{deviceId}}
   "edits": null
 }
 
-### Confirm the last section — closes the CV: nextSection null, sessionStatus "completed", cvId returned
+### Confirm the last section — closes the CV: nextSection null, sessionStatus "completed", cvId returned, nextMessage is the closing message
 POST {{baseUrl}}/conversations/:sessionId/sections/languages/confirm
 Content-Type: application/json
 X-Device-Id: {{deviceId}}
