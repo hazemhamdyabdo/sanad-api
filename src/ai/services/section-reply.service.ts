@@ -13,21 +13,52 @@ import { CARD_SCHEMA_BY_SECTION, conversationReplySchema, type SectionReply } fr
 const SOFT_FALLBACK_MESSAGE = 'معلش، ممكن تقولهالي تاني؟';
 
 /**
- * Extraction failure must not make the user repeat useful data. Their full transcript is already
- * persisted; a short closing answer on the next turn lets extraction run over it again.
+ * A section is NEVER skipped or left empty because the model couldn't structure what the user said —
+ * the conversation stays in the section and asks a specific clarifying question instead, until a real
+ * card comes out and the user confirms it. Each section has a few differently-worded questions, each
+ * asking for exactly what the card needs, rotated so the user never gets the same line twice in a row.
  */
-const EXTRACTION_RECOVERY_MESSAGE = 'تمام، سجلت اللي قولته. في تفصيلة تانية تحب تضيفها؟';
-/** Must match EXTRACTION_RECOVERY_MESSAGE — used to count how many times it's already been asked in this section. */
-const EXTRACTION_RECOVERY_MENTION = /في تفصيلة تانية تحب تضيفها/;
-/** How many times the recovery question may be asked per section before the section is skipped instead. */
-const EXTRACTION_RECOVERY_LIMIT = 1;
+const CLARIFY_QUESTIONS_BY_SECTION: Record<SectionId, string[]> = {
+  basic: ['معلش، عايز أكتبها صح — ممكن تقولي اسمك بالكامل تاني؟', 'تمام، وإيه المسمى الوظيفي اللي تحب يتكتب في الـ CV؟'],
+  experience: [
+    'معلش، عايز أكتبها صح — إيه المسمى الوظيفي بالظبط، وكنت شغال في أنهي شركة أو مكان؟',
+    'تمام، وكنت بتعمل إيه هناك بالظبط؟ قولي حاجتين أو تلاتة من شغلك اليومي.',
+    'خليني أتأكد — كنت شغال فين، وبتعمل إيه هناك في جملة واحدة؟',
+  ],
+  projects: [
+    'معلش، عايز أكتبها صح — إيه اسم المشروع، وكان بيعمل إيه باختصار؟',
+    'تمام، وإنت بالظبط عملت إيه فيه؟ قولي حاجتين أو تلاتة.',
+  ],
+  education: [
+    'معلش، عايز أكتبها صح — إيه اسم المؤهل بالظبط، ومن أنهي جامعة أو مدرسة؟',
+    'خليني أتأكد — اتخرجت من أنهي كلية أو مدرسة، والشهادة اسمها إيه؟',
+  ],
+  certificates: [
+    'معلش، عايز أكتبها صح — إيه اسم الشهادة أو الكورس بالظبط؟',
+    'خليني أتأكد — الكورس ده كان اسمه إيه، ومن أنهي جهة؟',
+  ],
+  skills: [
+    'معلش، عايز أكتبها صح — قولي المهارات تاني، وجنب كل واحدة مستواك: مبتدئ، متوسط، متقدم، ولا خبير؟',
+    'خليني أتأكد — إيه المهارات اللي تحب تتكتب، ومستواك في كل واحدة؟',
+  ],
+  languages: [
+    'معلش، عايز أكتبها صح — إيه اللغات اللي بتتكلمها، ومستواك في كل واحدة؟ (العربي لغة أم مثلًا)',
+    'خليني أتأكد — قولي كل لغة ومستواك فيها.',
+  ],
+};
 
 /**
- * Said when a section is skipped because no card could be produced (most often: the user genuinely has
- * nothing for it, e.g. no certificates). The next section's fixed opening question follows as its own
- * message, so this must not ask anything itself.
+ * The only sections that may legitimately have nothing in them. When the (stronger) extraction model
+ * finds nothing twice here, the user gets an empty card to confirm ("no certificates") — still their
+ * explicit decision, never a silent skip. Every other section must end with real entries.
  */
-const SECTION_SKIPPED_MESSAGE = 'تمام، مفيش مشكلة. لو حبيت تضيف حاجة في الجزء ده بعدين، تقدر من صفحة مراجعة الـ CV.';
+const SECTIONS_ALLOWED_EMPTY: SectionId[] = ['certificates'];
+
+function clarifyingQuestion(section: SectionId, history: LlmMessage[]): string {
+  const questions = CLARIFY_QUESTIONS_BY_SECTION[section];
+  const alreadyAsked = history.filter((entry) => entry.role === 'assistant' && questions.includes(entry.content)).length;
+  return questions[alreadyAsked % questions.length] as string;
+}
 const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص قبله أو بعده.';
 
 /** Reminders sent on each retry of the conversation call, escalating from a pure formatting nudge to also asking for different phrasing. */
@@ -211,8 +242,9 @@ const EXTRACTION_CALL = 'extraction';
 type CallKind = typeof CONVERSATION_CALL | typeof EXTRACTION_CALL;
 
 /**
- * `empty` = the model looked twice and found nothing (e.g. no certificates) — a real answer.
- * `failed` = it couldn't produce a valid card at all — the data may be there, so don't give up on it first time.
+ * `empty` = the model looked twice and found nothing (e.g. no certificates).
+ * `failed` = it couldn't produce a valid card at all.
+ * Outside SECTIONS_ALLOWED_EMPTY both mean the same thing: ask the user to clarify.
  */
 type ExtractionOutcome = { kind: 'card'; card: Record<string, unknown> | unknown[] } | { kind: 'empty' } | { kind: 'failed' };
 
@@ -246,14 +278,13 @@ export class SectionReplyService {
 
     if (!convOutcome.success) {
       this.logger.warn(`Conversation call failed after all retries (section: ${section}) — falling back to a soft in-character message.`);
-      return { message: SOFT_FALLBACK_MESSAGE, section, sectionDone: false, hasNoExperience: false, card: null, skippedIncomplete: false };
+      return { message: SOFT_FALLBACK_MESSAGE, section, sectionDone: false, hasNoExperience: false, card: null };
     }
 
     const message = insertArabicLatinBoundarySpace(convOutcome.data.message);
     const hasNoExperience = section === 'experience' && convOutcome.data.hasNoExperience;
     let sectionDone = convOutcome.data.sectionDone;
     let finalMessage = message;
-    let skippedIncomplete = false;
 
     if (!sectionDone && !hasNoExperience && soundsLikeClosing(message)) {
       this.logger.warn(`Model wrote a closing message but sectionDone: false (section: ${section}) — overriding to true.`);
@@ -299,6 +330,11 @@ export class SectionReplyService {
       const extraction = await this.extractCard(section, fullHistory, closingMessageOnly);
       card = extraction.kind === 'card' ? extraction.card : null;
 
+      if (extraction.kind === 'empty' && SECTIONS_ALLOWED_EMPTY.includes(section)) {
+        // The user has none (e.g. no certificates) — shown as an empty card for them to confirm.
+        card = [];
+      }
+
       if (card === null && hasEntries(previousBestCard)) {
         // An earlier turn in this section already produced a real card — show that rather than lose it.
         this.logger.warn(`Extraction failed but a prior card exists (section: ${section}) — reusing it.`);
@@ -306,20 +342,11 @@ export class SectionReplyService {
       }
 
       if (card === null) {
-        const recoveryAsked = countAssistantMentions(history, EXTRACTION_RECOVERY_MENTION);
-        if (extraction.kind === 'empty' || recoveryAsked >= EXTRACTION_RECOVERY_LIMIT) {
-          // Either the user has nothing for this section (confirmed empty twice), or extraction already
-          // failed once and they were asked. Asking again is what looped forever, so the section is left
-          // unconfirmed and the conversation moves on. Their messages stay persisted, and the section
-          // can be filled from the CV review screen.
-          this.logger.warn(`No card for section ${section} (${extraction.kind}, recovery asked ${recoveryAsked}x) — skipping it.`);
-          finalMessage = SECTION_SKIPPED_MESSAGE;
-          skippedIncomplete = true;
-        } else {
-          // First failure while the user may still be adding things: ask once, then extraction runs
-          // again over the full (persisted) transcript on their next reply.
-          finalMessage = EXTRACTION_RECOVERY_MESSAGE;
-        }
+        // Never advance past a section we couldn't structure, and never leave it empty: stay here and
+        // ask for exactly what the card needs. The full transcript is persisted, so extraction runs
+        // over everything again on the next reply — the user only adds, never repeats their whole story.
+        this.logger.warn(`No card for section ${section} (${extraction.kind}) — asking the user to clarify.`);
+        finalMessage = clarifyingQuestion(section, history);
         sectionDone = false;
       } else if (Array.isArray(card) && Array.isArray(previousBestCard) && card.length < previousBestCard.length) {
         // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
@@ -339,7 +366,7 @@ export class SectionReplyService {
       }
     }
 
-    return { message: finalMessage, section, sectionDone, hasNoExperience, card, skippedIncomplete };
+    return { message: finalMessage, section, sectionDone, hasNoExperience, card };
   }
 
   /**

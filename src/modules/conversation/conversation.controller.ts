@@ -87,11 +87,6 @@ export class ConversationController {
       if (reply.section === 'experience' && reply.hasNoExperience) {
         // No card to confirm here — the section itself is replaced, per the contract's own note that `projects` stands in for `experience` when the user hasn't worked before.
         await this.conversationService.switchExperienceToProjects(session);
-      } else if (reply.skippedIncomplete) {
-        // Extraction couldn't produce a usable card even after every retry — rather than block the
-        // conversation forever, this section stays unconfirmed and the flow moves on to the next one.
-        const nextMessage = await this.conversationService.skipCurrentSection(session);
-        await this.streamTextMessage(sse, nextMessage);
       } else if (reply.sectionDone && reply.card) {
         const cardMessage = await this.conversationService.appendSectionCardMessage(session, reply);
         sse.send('section_card', {

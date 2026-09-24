@@ -33,9 +33,6 @@ const SECTION_OPENING_MESSAGES: Record<SectionId, string> = {
   languages: 'آخر حاجة، اللغات اللي بتتكلمها وإيه مستواك فيها؟',
 };
 
-/** Sent when the LAST section is skipped (no card could be produced), so the conversation still ends. */
-const CONVERSATION_ENDED_WITH_GAPS_MESSAGE = 'كده خلصنا المحادثة 🎉 راجع الـ CV بتاعك، وكمّل أي جزء ناقص قبل ما تحمّله.';
-
 /** Sent as the `nextMessage` on the confirm that closes the CV (no `nextSection` left). */
 const CV_COMPLETE_MESSAGE = 'مبروك! خلصنا الـ CV بتاعك 🎉 تقدر تراجعه دلوقتي وتعدل أي حاجة قبل ما تحمّله.';
 
@@ -239,45 +236,6 @@ export class ConversationService {
     session.sections[index] = { id: 'projects', label: SECTION_LABELS.projects, status: 'pending' };
     session.currentSection = 'projects';
     await this.conversationRepository.saveSession(session);
-  }
-
-  /**
-   * Used when a section's data repeatedly fails to extract despite the user having provided real
-   * content — progress must not depend on extraction succeeding. The section is left `pending`
-   * (never confirmed, no CvSection row) and the conversation moves on to the next one; the CV review
-   * screen is where the user finishes it later. If it was the last section, the session itself is
-   * marked completed even though this one was never confirmed — `Cv.isComplete` only ever becomes
-   * true via an explicit confirm, so it correctly stays false until the user goes back and fills it
-   * in, while the conversation flow itself still reaches an end either way.
-   */
-  async skipCurrentSection(session: ConversationSession): Promise<Message> {
-    const index = session.sections.findIndex((section) => section.id === session.currentSection);
-    const nextSection = session.sections[index + 1]?.id ?? null;
-
-    // Same as confirm: the next section's fixed opening question is persisted with the move, so the
-    // chat never goes silent and the next section's history starts with the question it asked.
-    return this.dataSource.transaction(async (manager) => {
-      session.currentSection = nextSection;
-      if (nextSection === null) {
-        session.status = 'completed';
-      }
-      await this.conversationRepository.saveSession(session, manager);
-      return this.conversationRepository.createMessage(
-        {
-          id: generateId('msg'),
-          sessionId: session.id,
-          role: 'ai',
-          section: nextSection,
-          type: 'text',
-          text: nextSection === null ? CONVERSATION_ENDED_WITH_GAPS_MESSAGE : SECTION_OPENING_MESSAGES[nextSection],
-          card: null,
-          quickReplies: null,
-          source: null,
-          audioDurationSec: null,
-        },
-        manager,
-      );
-    });
   }
 
   isLastSection(session: ConversationSession, sectionId: SectionId): boolean {
