@@ -118,6 +118,10 @@ export class CvService {
   /** Saves the durable analysis and seeds every high-confidence section into the device's CV atomically. */
   saveAnalysis(deviceId: string, uploadId: string, analysis: CvAnalysisResult): Promise<void> {
     return this.dataSource.transaction(async (manager) => {
+      // Serialize replacement of the one analysis/CV owned by this device. This protects both
+      // unique deviceId rows when multiple uploads finish at nearly the same time.
+      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`cv-analysis:${deviceId}`]);
+
       await this.cvRepository.upsertAnalysis({
         id: generateId('cva'),
         deviceId,

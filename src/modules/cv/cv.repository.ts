@@ -82,11 +82,10 @@ export class CvRepository {
   /** One row per device — replaces whatever analysis was there before, same "a new upload starts fresh" semantics as `Cv` itself. */
   async upsertAnalysis(analysis: Omit<CvAnalysis, 'createdAt' | 'updatedAt'>, manager?: EntityManager): Promise<CvAnalysis> {
     const repository = this.scoped(this.cvAnalysisRepo, manager);
-    const existing = await repository.findOneBy({ deviceId: analysis.deviceId });
-    if (existing) {
-      return repository.save(Object.assign(existing, analysis));
-    }
-    return repository.save(analysis);
+    // Two uploads for one device can finish together. Resolve that unique-key race inside
+    // Postgres instead of doing a separate read followed by an insert.
+    await repository.upsert(analysis, { conflictPaths: ['deviceId'] });
+    return repository.findOneByOrFail({ deviceId: analysis.deviceId });
   }
 
   /** Binds a repository to a shared transaction manager when one is given, otherwise uses the module's own connection. */
