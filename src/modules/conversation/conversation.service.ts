@@ -8,6 +8,7 @@ import { RawResponseException } from '../../common/errors/raw-response.exception
 import { DEFAULT_BUILD_SECTIONS, SECTION_LABELS, type SectionId, type SessionStatus } from '../../common/types/contract.js';
 import type { LlmMessage } from '../../integrations/llm/llm.interface.js';
 import { CvService } from '../cv/index.js';
+import { UploadService } from '../upload/index.js';
 import { ConversationRepository } from './conversation.repository.js';
 import type { ConfirmSectionDto } from './dto/confirm-section.dto.js';
 import type { ConfirmSectionResponseDto } from './dto/confirm-section-response.dto.js';
@@ -47,13 +48,21 @@ export class ConversationService {
   constructor(
     private readonly conversationRepository: ConversationRepository,
     private readonly cvService: CvService,
+    private readonly uploadService: UploadService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async create(deviceId: string, dto: CreateConversationDto): Promise<ConversationResponseDto> {
-    if (dto.mode === 'upload') {
-      // Temporary: the upload module doesn't exist yet. Not a contract change, just unimplemented.
-      throw new AppError('INVALID_REQUEST', 'رفع الـ CV لسه مش متاح', { retryable: false });
+    // Validate an upload before touching an existing session. A typo/stale upload id must never
+    // destroy the conversation the user can still resume.
+    const uploadAnalysis =
+      dto.mode === 'upload'
+        ? dto.uploadId
+          ? await this.uploadService.getCompletedAnalysis(dto.uploadId, deviceId)
+          : null
+        : null;
+    if (dto.mode === 'upload' && !dto.uploadId) {
+      throw new AppError('INVALID_REQUEST', 'لازم تبعت رقم ملف الـ CV اللي اتحلل', { retryable: false });
     }
 
     const existing = await this.conversationRepository.findActiveByDeviceId(deviceId);
@@ -61,24 +70,57 @@ export class ConversationService {
       if (!dto.restart) {
         throw new RawResponseException(HttpStatus.CONFLICT, { activeSessionId: existing.id });
       }
-      await this.deleteSessionAndItsCv(existing);
+      if (dto.mode === 'upload') {
+        // Upload analysis has already replaced the device's CV with its high-confidence sections.
+        // Restart only the old chat here; deleting that CV would throw away the freshly parsed data.
+        await this.conversationRepository.deleteById(existing.id);
+      } else {
+        await this.deleteSessionAndItsCv(existing);
+      }
     }
 
-    const sections: SessionSection[] = DEFAULT_BUILD_SECTIONS.map((id) => ({
+    let sectionIds = DEFAULT_BUILD_SECTIONS;
+    let cvId: string | null = null;
+    if (dto.mode === 'upload') {
+      // `uploadAnalysis` can only be null for a missing upload id, rejected above.
+      const analysis = uploadAnalysis!;
+      sectionIds = DEFAULT_BUILD_SECTIONS.filter((id) => analysis.sectionConfidence[id] === 'low');
+      // Projects isn't in the default build list, but can be the missing work-proof section for a
+      // project-led CV. Include it exactly where experience would normally appear.
+      if (analysis.sectionConfidence.projects === 'low' && !sectionIds.includes('projects')) {
+        const experienceIndex = sectionIds.indexOf('experience');
+        sectionIds.splice(experienceIndex === -1 ? 1 : experienceIndex, 0, 'projects');
+      }
+      cvId = (await this.cvService.getForDevice(deviceId)).cvId;
+    }
+
+    const sections: SessionSection[] = sectionIds.map((id) => ({
       id,
       label: SECTION_LABELS[id],
       status: 'pending',
     }));
 
+    const currentSection = sections[0]?.id ?? null;
+    const sessionStatus = currentSection ? 'in_progress' : 'completed';
+    let openingText = currentSection ? SECTION_OPENING_MESSAGES[currentSection] : CV_COMPLETE_MESSAGE;
+    if (dto.mode === 'upload' && currentSection === 'basic' && uploadAnalysis) {
+      const basic = uploadAnalysis.cv.basic;
+      if (!basic.title) {
+        openingText = 'قرأنا اسمك من الملف. إيه المسمى الوظيفي بتاعك، أو الوظيفة اللي بتدور عليها؟';
+      } else if (!basic.phone && !basic.email) {
+        openingText = 'البيانات الأساسية واضحة، ناقص بس وسيلة تواصل. ممكن رقم موبايلك أو إيميلك؟';
+      }
+    }
+
     const session = await this.conversationRepository.create({
       id: generateId('cnv'),
       deviceId,
-      mode: 'build',
-      status: 'in_progress',
-      currentSection: sections[0]?.id ?? null,
+      mode: dto.mode,
+      status: sessionStatus,
+      currentSection,
       sections,
-      uploadId: null,
-      cvId: null,
+      uploadId: dto.mode === 'upload' ? (dto.uploadId ?? null) : null,
+      cvId,
     });
 
     // Persisted as a normal assistant message so it comes back with GET /conversations/:id and is
@@ -90,7 +132,7 @@ export class ConversationService {
       role: 'ai',
       section: session.currentSection,
       type: 'text',
-      text: SECTION_OPENING_MESSAGES.basic,
+      text: openingText,
       card: null,
       quickReplies: null,
       source: null,
@@ -154,9 +196,14 @@ export class ConversationService {
    * than an earlier attempt can be recognized as data loss rather than the user's own edit.
    */
   async getBestPriorSectionCard(sessionId: string, section: SectionId): Promise<Record<string, unknown> | unknown[] | null> {
+    const session = await this.conversationRepository.findById(sessionId);
     const messages = await this.conversationRepository.findMessagesBySessionId(sessionId);
     const cards = messages.filter((message) => message.type === 'section_card' && message.section === section && message.card !== null).map((message) => message.card as Record<string, unknown> | unknown[]);
     if (cards.length === 0) {
+      if (session?.mode === 'upload' && session.uploadId) {
+        const analysis = await this.cvService.getAnalysisForUpload(session.uploadId, session.deviceId);
+        return (analysis?.cv[section] as Record<string, unknown> | unknown[] | undefined) ?? null;
+      }
       return null;
     }
     const arrays = cards.filter((card): card is unknown[] => Array.isArray(card));

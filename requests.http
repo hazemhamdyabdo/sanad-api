@@ -266,3 +266,30 @@ Content-Disposition: form-data; name="sessionId"
 
 cnv_does_not_matter
 --SanadBoundary--
+
+### POST /cv/uploads — analyze an uploaded CV. Put a real PDF at ./tmp/sample.pdf first.
+POST {{baseUrl}}/cv/uploads
+X-Device-Id: {{deviceId}}
+Content-Type: multipart/form-data; boundary=SanadBoundary
+
+--SanadBoundary
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./tmp/sample.pdf
+--SanadBoundary--
+
+### POST /cv/uploads with no file — INVALID_REQUEST
+POST {{baseUrl}}/cv/uploads
+X-Device-Id: {{deviceId}}
+Content-Type: multipart/form-data; boundary=SanadBoundary
+
+--SanadBoundary
+Content-Disposition: form-data; name="note"
+
+no file attached
+--SanadBoundary--
+
+### GET /cv/uploads/:uploadId — poll for progress/result. Replace :uploadId with a real one from the POST above.
+GET {{baseUrl}}/cv/uploads/upl_replace_me
+X-Device-Id: {{deviceId}}

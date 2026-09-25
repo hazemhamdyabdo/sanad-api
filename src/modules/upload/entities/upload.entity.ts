@@ -1,16 +1,13 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
-import type { SectionId, UploadStatus } from '../../../common/types/contract.js';
-
-export interface UploadSummary {
-  found: Array<{ section: SectionId; label: string; count: number }>;
-  missingSections: SectionId[];
-  missingFields: string[];
-}
+import type { UploadStatus } from '../../../common/types/contract.js';
 
 /**
- * expiresAt is set by the upload service at creation time (not a DB
- * default) — the retention window is a product decision, not schema.
- * A cleanup job to purge expired files + rows is tracked in TODO.md.
+ * Transient processing bookkeeping only — never the long-lived profile. The uploaded file is kept
+ * on disk (`filePath`) just long enough for `CvAnalysisService` to read it, then deleted (success or
+ * failure, see `UploadService`) regardless of `expiresAt`. `expiresAt` is a backstop for a job that
+ * never finished (e.g. the API restarted mid-analysis) — the scheduled cleanup purges the row and
+ * any leftover file once it passes, whatever `status` ended up at. The actual analysis result lives
+ * on `CvAnalysis` (see `modules/cv/entities/cv-analysis.entity.ts`), which has no expiry.
  */
 @Entity('uploads')
 export class Upload {
@@ -35,9 +32,6 @@ export class Upload {
 
   @Column('varchar')
   mimeType!: string;
-
-  @Column({ type: 'jsonb', nullable: true })
-  summary!: UploadSummary | null;
 
   @Column({ type: 'text', nullable: true })
   error!: string | null;

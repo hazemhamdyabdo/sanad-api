@@ -14,6 +14,7 @@ import { ConversationModule } from './modules/conversation/index.js';
 import { CvModule } from './modules/cv/index.js';
 import { DeviceModule } from './modules/device/index.js';
 import { TranscriptionModule } from './modules/transcription/index.js';
+import { UploadModule } from './modules/upload/index.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { TranscriptionModule } from './modules/transcription/index.js';
     ConversationModule,
     CvModule,
     TranscriptionModule,
+    UploadModule,
     LlmModule,
   ],
   controllers: [AppController, LlmDebugController],

@@ -39,6 +39,31 @@ export type SectionStatus = (typeof SECTION_STATUSES)[number];
 export const UPLOAD_STATUSES = ['parsing', 'done', 'failed'] as const;
 export type UploadStatus = (typeof UPLOAD_STATUSES)[number];
 
+export const SENIORITY_LEVELS = ['junior', 'mid', 'senior'] as const;
+export type Seniority = (typeof SENIORITY_LEVELS)[number];
+
+/**
+ * How sure the CV-upload analysis is about one section, decided deterministically in code (the
+ * same validation the live conversation already uses to decide a section's card is complete) —
+ * never a self-reported score from the model. `high` sections are saved into the CV automatically;
+ * `low` ones are left for the user to fill in via the upload-mode conversation; `n/a` means the
+ * section legitimately doesn't apply (e.g. `experience` when the CV is all `projects`).
+ */
+export const SECTION_CONFIDENCE_LEVELS = ['high', 'low', 'n/a'] as const;
+export type SectionConfidence = (typeof SECTION_CONFIDENCE_LEVELS)[number];
+
+export const QUALITY_ISSUE_TYPES = [
+  'employment_gap',
+  'weak_bullets',
+  'no_metrics',
+  'ats_formatting',
+  'inconsistent_dates',
+  'contact_missing',
+  'generic_summary',
+  'other',
+] as const;
+export type QualityIssueType = (typeof QUALITY_ISSUE_TYPES)[number];
+
 /** Arabic labels for each section — the contract shows these as examples, not a fixed enum, so wording here isn't a contract commitment. */
 export const SECTION_LABELS: Record<SectionId, string> = {
   basic: 'البيانات الأساسية',

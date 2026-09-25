@@ -3,7 +3,8 @@ import { LEVELS, type SectionId } from '../../common/types/contract.js';
 
 const text = () => z.string().trim().min(1);
 
-const basicCardSchema = z.object({
+/** Exported (alongside the other per-section schemas below) so `ai/schemas/cv-analysis.schema.ts` can compose a strongly-typed `cv` shape — `CARD_SCHEMA_BY_SECTION`'s `Record<SectionId, z.ZodType>` typing loses each section's actual shape. */
+export const basicCardSchema = z.object({
   name: text(),
   title: text().nullable(),
   phone: text().nullable(),
@@ -18,7 +19,7 @@ const basicCardSchema = z.object({
  * extraction at all, but if it slips through anyway, an empty array is a
  * far better outcome than hard-failing the user's turn over it.
  */
-const experienceCardSchema = z.array(
+export const experienceCardSchema = z.array(
   z.object({
     title: text(),
     company: text(),
@@ -28,11 +29,14 @@ const experienceCardSchema = z.array(
   }),
 );
 
-const projectsCardSchema = z.object({
+/** One project's shape — exported separately from `projectsCardSchema` (the single-object card the live conversation builds) so `ai/schemas/cv-analysis.schema.ts` can reuse it as `z.array(projectEntrySchema)`: an uploaded CV can legitimately list more than one project, unlike a single conversation turn. */
+export const projectEntrySchema = z.object({
   title: text(),
   description: text(),
   bullets: z.array(text()).min(1),
 });
+
+const projectsCardSchema = projectEntrySchema;
 
 /**
  * A user usually has more than one degree/diploma — an array, same reasoning
@@ -41,7 +45,7 @@ const projectsCardSchema = z.object({
  * user who's entirely self-taught genuinely has zero entries to report, and
  * that's a legitimate answer, not a defect to reject.
  */
-const educationCardSchema = z.array(
+export const educationCardSchema = z.array(
   z.object({
     degree: text(),
     school: text(),
@@ -50,7 +54,7 @@ const educationCardSchema = z.array(
 );
 
 /** A user usually has more than one certificate, but plenty of people genuinely have none — an empty array is a legitimate, honest answer, not a defect. */
-const certificatesCardSchema = z.array(
+export const certificatesCardSchema = z.array(
   z.object({
     name: text(),
     date: text().nullable(),
@@ -61,14 +65,14 @@ const certificatesCardSchema = z.array(
 const SKILL_LEVELS = LEVELS.filter((level) => level !== 'native') as Exclude<(typeof LEVELS)[number], 'native'>[];
 
 /** A user typically names several skills/languages in one answer — an array so the model isn't forced to drop all but one. An empty array is still valid: rare, but not worth hard-failing a whole conversation over. */
-const skillsCardSchema = z.array(
+export const skillsCardSchema = z.array(
   z.object({
     name: text(),
     level: z.enum(SKILL_LEVELS),
   }),
 );
 
-const languagesCardSchema = z.array(
+export const languagesCardSchema = z.array(
   z.object({
     name: text(),
     level: z.enum(LEVELS),

@@ -15,6 +15,35 @@ const NO_EXPERIENCE_SIGNAL = /مشتغلش|مشتغلتش|معنديش خبرة|
 /** Marker unique to the extraction prompt's system message (see ai/prompts/section-reply.prompt.ts) — distinguishes it from the conversation call, which shares the same `current_section: <id>` line. */
 const EXTRACTION_MARKER = 'استخرج البيانات';
 
+/** Marker unique to the CV-upload analysis prompt (see ai/prompts/cv-analysis.prompt.ts) — a separate, self-contained prompt with no `current_section` line. */
+const CV_ANALYSIS_MARKER = 'حلل ملف السيرة الذاتية';
+
+/** One fixed, schema-valid analysis — ignores the actual attached PDF (fake mode never reads document bytes), just enough shape for the upload pipeline to be exercised without a real key. */
+const FAKE_CV_ANALYSIS = {
+  cv: {
+    basic: { name: 'Fake User', title: 'Fake Title', phone: '+201000000000', email: 'fake@example.com', location: 'Cairo, Egypt' },
+    experience: [{ title: 'Fake Title', company: 'Fake Co', start: '2022', end: null, bullets: ['Did fake work'] }],
+    projects: [],
+    education: [{ degree: 'Fake Degree', school: 'Fake University', year: '2020' }],
+    certificates: [],
+    skills: [{ name: 'Fake Skill', level: 'intermediate' }],
+    languages: [{ name: 'Arabic', level: 'native' }],
+  },
+  seniority: 'mid',
+  yearsOfExperience: 2,
+  skills: {
+    technical: [{ name: 'Fake Skill', level: 'intermediate', yearsUsed: 2 }],
+    tools: [],
+    soft: [],
+  },
+  domains: ['fake-domain'],
+  strengths: ['خبرة واضحة في المجال'],
+  gaps: ['مفيش شهادات مذكورة'],
+  qualityIssues: [{ type: 'no_metrics', description: 'الخبرات من غير أرقام واضحة' }],
+  overallScore: 70,
+  scoreReason: 'سيرة ذاتية تجريبية (fake) — للاختبار بس',
+};
+
 /** One canned, schema-valid card for the single-entry sections. */
 const FAKE_CARD_BY_SECTION: Record<Exclude<SectionId, MultiEntrySection>, (userText: string) => Record<string, unknown> | unknown[]> = {
   basic: (userText) => ({ name: userText, title: null, phone: null, email: null, location: null }),
@@ -68,6 +97,9 @@ export class FakeLlmProvider implements LlmProvider {
     const system = options.messages.find((message) => message.role === 'system')?.content ?? '';
     const section = (/current_section:\s*(\w+)/.exec(system)?.[1] ?? 'basic') as SectionId;
 
+    if (system.includes(CV_ANALYSIS_MARKER)) {
+      return FAKE_CV_ANALYSIS;
+    }
     if (system.includes(EXTRACTION_MARKER)) {
       return this.buildExtractionReply(section, options);
     }

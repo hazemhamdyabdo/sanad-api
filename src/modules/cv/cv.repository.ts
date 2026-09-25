@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { generateId } from '../../common/ids.js';
 import type { SectionId } from '../../common/types/contract.js';
 import { Cv } from './entities/cv.entity.js';
+import { CvAnalysis } from './entities/cv-analysis.entity.js';
 import { CvSection } from './entities/cv-section.entity.js';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class CvRepository {
   constructor(
     @InjectRepository(Cv) private readonly cvRepo: Repository<Cv>,
     @InjectRepository(CvSection) private readonly cvSectionRepo: Repository<CvSection>,
+    @InjectRepository(CvAnalysis) private readonly cvAnalysisRepo: Repository<CvAnalysis>,
   ) {}
 
   async existsForDevice(deviceId: string): Promise<boolean> {
@@ -67,6 +69,24 @@ export class CvRepository {
     } else {
       await repository.save({ id: generateId('sec'), cvId, section, content, confirmedAt: new Date() });
     }
+  }
+
+  findAnalysisByDeviceId(deviceId: string): Promise<CvAnalysis | null> {
+    return this.cvAnalysisRepo.findOneBy({ deviceId });
+  }
+
+  findAnalysisByUploadId(uploadId: string, deviceId: string): Promise<CvAnalysis | null> {
+    return this.cvAnalysisRepo.findOneBy({ uploadId, deviceId });
+  }
+
+  /** One row per device — replaces whatever analysis was there before, same "a new upload starts fresh" semantics as `Cv` itself. */
+  async upsertAnalysis(analysis: Omit<CvAnalysis, 'createdAt' | 'updatedAt'>, manager?: EntityManager): Promise<CvAnalysis> {
+    const repository = this.scoped(this.cvAnalysisRepo, manager);
+    const existing = await repository.findOneBy({ deviceId: analysis.deviceId });
+    if (existing) {
+      return repository.save(Object.assign(existing, analysis));
+    }
+    return repository.save(analysis);
   }
 
   /** Binds a repository to a shared transaction manager when one is given, otherwise uses the module's own connection. */

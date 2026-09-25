@@ -213,11 +213,13 @@ Response `200`:
 
 ---
 
-## 4. رفع CV
+## 4. رفع CV وتحليلها
+
+الباك بياخد ملف الـ CV نفسه (PDF) ويبعته للموديل كملف — مش نص متسحب منه — عشان يشوف التنسيق كمان. الناتج مش مجرد بيانات متقسّمة، ده تحليل كامل (analysis): السكشنز العادية بتاعة الـ CV، ومعاها خبرة/مهارات/مجالات/نقط قوة وضعف/مشاكل في جودة الملف نفسه/تقييم عام. الـ analysis ده بيتخزن على الجهاز ومنه هيتبنى الـ CV (لما اليوزر يراجعه ويكمّله في المحادثة) وهيتستخدم بعدين في مطابقة الوظايف.
 
 ### `POST /cv/uploads`
 
-`multipart/form-data`: `file` (pdf, docx, png, jpg — أقصى 10MB).
+`multipart/form-data`: `file` (PDF بس دلوقتي — أقصى 10MB).
 
 Response `202`:
 ```json
@@ -226,7 +228,7 @@ Response `202`:
   "status": "parsing",
   "stages": [
     { "key": "reading", "text": "بنقرا الملف..." },
-    { "key": "extracting", "text": "بنطلّع خبراتك ومهاراتك..." },
+    { "key": "analyzing", "text": "بنحلل خبراتك ومهاراتك..." },
     { "key": "checking", "text": "بنشوف الناقص إيه..." }
   ]
 }
@@ -241,19 +243,46 @@ Response `202`:
   "uploadId": "upl_01H...",
   "status": "done",
   "currentStage": "checking",
-  "summary": {
-    "found": [
-      { "section": "experience", "label": "خبرات", "count": 2 },
-      { "section": "skills", "label": "مهارات", "count": 6 }
-    ],
-    "missingSections": ["basic", "languages"],
-    "missingFields": ["الإيميل", "نوع الشغل اللي بتدور عليه", "مستوى الإنجليزي"]
+  "analysis": {
+    "cv": {
+      "basic": { "name": "Ahmed Hassan", "title": "Sales & Accounts Associate", "phone": "+20 101 234 5678", "email": "ahmed.hassan@email.com", "location": "Nasr City, Cairo" },
+      "experience": [
+        { "title": "Sales & Accounts Associate", "company": "Mobile Store, Nasr City", "start": "03/2023", "end": "03/2025", "bullets": ["Handled 40+ daily customer interactions..."] }
+      ],
+      "projects": [],
+      "education": [{ "degree": "Bachelor of Commerce – Accounting", "school": "Ain Shams University", "year": "2023" }],
+      "certificates": [{ "name": "Advanced Microsoft Excel", "date": "2024" }],
+      "skills": [{ "name": "Microsoft Excel", "level": "advanced" }],
+      "languages": [{ "name": "English", "level": "intermediate" }]
+    },
+    "sectionConfidence": { "basic": "high", "experience": "high", "projects": "n/a", "education": "high", "certificates": "high", "skills": "high", "languages": "low" },
+    "seniority": "mid",
+    "yearsOfExperience": 2,
+    "skills": {
+      "technical": [{ "name": "Microsoft Excel", "level": "advanced", "yearsUsed": 2 }],
+      "tools": [],
+      "soft": [{ "name": "Customer Service", "level": "advanced", "yearsUsed": null }]
+    },
+    "domains": ["retail", "customer-service"],
+    "strengths": ["خبرة واضحة في خدمة العملاء لمدة سنتين"],
+    "gaps": ["مفيش شهادات أو كورسات تقنية مذكورة"],
+    "qualityIssues": [{ "type": "no_metrics", "description": "خبراتك متذكرش أرقام، زي عدد العملاء أو نسبة تحسين" }],
+    "overallScore": 62,
+    "scoreReason": "سيرة ذاتية واضحة بس محتاجة أرقام وتفاصيل أكتر في الخبرة"
   }
 }
 ```
 
-`status`: `parsing` · `done` · `failed` (ومعاها `error`).
-بعد `done` الفرونت يبدأ محادثة بـ `mode: "upload"` و`uploadId`، والباك يرجّع الـ `missingSections` بس.
+`status`: `parsing` · `done` · `failed` (ومعاها `error`). لو `failed`، مفيش `analysis`.
+
+`sectionConfidence`: لكل قيمة من `SectionId` — `high` (السكشن اتلقى كامل وهيتحفظ في الـ CV أوتوماتيك من غير ما اليوزر يأكده بنفسه)، `low` (ناقص أو مش واضح، هيتسأل عنه في المحادثة)، `n/a` (مش منطبق، زي `experience` لما الـ CV كله `projects`).
+
+بعد `done` الفرونت يبدأ محادثة بـ `mode: "upload"` و`uploadId`.
+
+**ثوابت التحليل:**
+- `Seniority`: `junior` · `mid` · `senior`
+- `SectionConfidence`: `high` · `low` · `n/a`
+- `QualityIssueType`: `employment_gap` · `weak_bullets` · `no_metrics` · `ats_formatting` · `inconsistent_dates` · `contact_missing` · `generic_summary` · `other`
 
 ---
 

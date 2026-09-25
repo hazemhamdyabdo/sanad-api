@@ -327,8 +327,13 @@ export class SectionReplyService {
       // which the chat API rejects) — instead, the extraction prompt is told explicitly to disregard
       // it as a data source when deciding what's in the section.
       const closingMessageOnly = hasClosingIntent(userText) && history.length > 0;
-      const extraction = await this.extractCard(section, fullHistory, closingMessageOnly);
+      const extraction = await this.extractCard(section, fullHistory, closingMessageOnly, previousBestCard);
       card = extraction.kind === 'card' ? extraction.card : null;
+
+      if (card && previousBestCard && !Array.isArray(card) && !Array.isArray(previousBestCard)) {
+        const suppliedValues = Object.fromEntries(Object.entries(card).filter(([, value]) => value !== null && value !== undefined && value !== ''));
+        card = { ...previousBestCard, ...suppliedValues };
+      }
 
       if (extraction.kind === 'empty' && SECTIONS_ALLOWED_EMPTY.includes(section)) {
         // The user has none (e.g. no certificates) — shown as an empty card for them to confirm.
@@ -374,8 +379,13 @@ export class SectionReplyService {
    * retry failed outright, or the result stayed empty after a re-check despite real content
    * earlier in the section. Both are "don't show anything", not "show nothing and call it done".
    */
-  private async extractCard(section: SectionId, sectionHistory: LlmMessage[], closingMessageOnly = false): Promise<ExtractionOutcome> {
-    const extractionMessages = buildExtractionPrompt(section, sectionHistory, closingMessageOnly);
+  private async extractCard(
+    section: SectionId,
+    sectionHistory: LlmMessage[],
+    closingMessageOnly = false,
+    existingCard?: Record<string, unknown> | unknown[] | null,
+  ): Promise<ExtractionOutcome> {
+    const extractionMessages = buildExtractionPrompt(section, sectionHistory, closingMessageOnly, existingCard);
     const parse = (value: unknown): { success: true; data: Record<string, unknown> | unknown[] } | { success: false; error: { issues: unknown } } => {
       const result = CARD_SCHEMA_BY_SECTION[section].safeParse(dropAllNullEntries(value));
       return result.success ? { success: true, data: result.data as Record<string, unknown> | unknown[] } : { success: false, error: { issues: result.error.issues } };

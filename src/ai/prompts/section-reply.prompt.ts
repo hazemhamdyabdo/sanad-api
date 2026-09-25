@@ -150,13 +150,21 @@ export function buildConversationPrompt(section: SectionId, history: LlmMessage[
  * section's transcript, so it never competes with holding the conversation
  * for the model's attention.
  */
-export function buildExtractionPrompt(section: SectionId, history: LlmMessage[], closingMessageOnly = false): LlmMessage[] {
+export function buildExtractionPrompt(
+  section: SectionId,
+  history: LlmMessage[],
+  closingMessageOnly = false,
+  existingCard?: Record<string, unknown> | unknown[] | null,
+): LlmMessage[] {
   const system: LlmMessage = {
     role: 'system',
     content: [
       `دي محادثة بين مساعد ومستخدم بيبني سيرة ذاتية (CV)، عن قسم "${SECTION_LABELS[section]}" (current_section: ${section}).`,
       'مهمتك: اقرأ المحادثة واستخرج البيانات اللي المستخدم قالها بالفعل، وحطها في شكل JSON محدد. متتكلمش، ومتسألش سؤال، ومتضيفش نص.',
       '- متخترعش أي رقم أو تاريخ أو اسم أو تفصيلة المستخدم مقالهاش. لو تفصيلة ناقصة جوه عنصر حقيقي والحقل بيسمح بـ null، سيبها null.',
+      existingCard
+        ? `- دي بيانات مقروءة من الـ CV المرفوع: ${JSON.stringify(existingCard)}. احتفظ بها وادمج معاها ما قاله المستخدم في المحادثة، ومتمسحش قيمة موجودة بـ null.`
+        : null,
       '- كل حاجة في الناتج إنجليزي احترافي مناسب لـ ATS، والـ bullets تبدأ بفعل قوي.',
       CARD_SHAPE_BY_SECTION[section].startsWith('[')
         ? '- رجع array فاضي [] بس لو المستخدم مقالش عن أي عنصر خالص في المحادثة كلها من الأول للآخر. لو ذكر عنصر واحد على الأقل في أي وقت في المحادثة، لازم تحطه في الـ array — كلمة "مفيش" أو "خلاص" في آخر رسالة بترد بس على سؤال "في حاجة تانية؟"، يعني "مفيش زيادة عن اللي قولته"، ومعناهاش إلغاء أو تجاهل اللي اتقال قبل كده في المحادثة. ممنوع تضيف عنصر بقيم null بدل ما ترجع array فاضي.'

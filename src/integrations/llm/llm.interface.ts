@@ -1,6 +1,12 @@
 export interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  /**
+   * Files attached to this message (e.g. a CV as a PDF) for a vision/document-capable model to read
+   * directly, alongside `content`'s text. Optional and additive — every existing text-only caller is
+   * unaffected. A provider that can't handle documents should throw rather than silently drop them.
+   */
+  documents?: Array<{ data: Buffer; mimeType: string }>;
 }
 
 export interface LlmCompletionOptions {

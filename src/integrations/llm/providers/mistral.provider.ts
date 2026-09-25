@@ -1,7 +1,24 @@
 import { Logger } from '@nestjs/common';
-import type { LlmCompletionOptions, LlmProvider } from '../llm.interface.js';
+import type { LlmCompletionOptions, LlmMessage, LlmProvider } from '../llm.interface.js';
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
+
+type MistralContentPart = { type: 'text'; text: string } | { type: 'document_url'; document_url: string };
+type MistralMessage = { role: LlmMessage['role']; content: string | MistralContentPart[] };
+
+/** Mistral's chat completions API wants `content` as a plain string for a text-only message, or an array of typed parts once a document (or image) is attached — never both. */
+function toMistralMessages(messages: LlmMessage[]): MistralMessage[] {
+  return messages.map((message) => {
+    if (!message.documents?.length) {
+      return { role: message.role, content: message.content };
+    }
+    const parts: MistralContentPart[] = [{ type: 'text', text: message.content }];
+    for (const doc of message.documents) {
+      parts.push({ type: 'document_url', document_url: `data:${doc.mimeType};base64,${doc.data.toString('base64')}` });
+    }
+    return { role: message.role, content: parts };
+  });
+}
 
 interface MistralUsage {
   prompt_tokens: number;
@@ -33,7 +50,7 @@ export class MistralProvider implements LlmProvider {
       headers: this.headers(),
       body: JSON.stringify({
         model: this.model,
-        messages: options.messages,
+        messages: toMistralMessages(options.messages),
         temperature: options.temperature,
         max_tokens: options.maxTokens,
         stream: false,
@@ -58,7 +75,7 @@ export class MistralProvider implements LlmProvider {
       headers: this.headers(),
       body: JSON.stringify({
         model: this.model,
-        messages: options.messages,
+        messages: toMistralMessages(options.messages),
         temperature: options.temperature,
         max_tokens: options.maxTokens,
         stream: true,

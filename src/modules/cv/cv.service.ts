@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import type { EntityManager } from 'typeorm';
+import type { CvAnalysisResult } from '../../ai/index.js';
 import { generateId } from '../../common/ids.js';
 import { AppError } from '../../common/errors/app-error.js';
 import type { SectionId } from '../../common/types/contract.js';
 import { CvRepository } from './cv.repository.js';
+import { toCvAnalysisResponseDto, type CvAnalysisResponseDto } from './dto/cv-analysis-response.dto.js';
 import { ARRAY_SECTIONS, toCvResponseDto, type CvResponseDto } from './dto/cv-response.dto.js';
 import type { PatchCvDto } from './dto/patch-cv.dto.js';
 import type { CvContact } from './entities/cv.entity.js';
@@ -28,6 +32,7 @@ export class CvService {
   constructor(
     private readonly cvRepository: CvRepository,
     private readonly cvPdfRenderer: CvPdfRenderer,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async exportPdf(deviceId: string): Promise<{ file: Buffer; filename: string }> {
@@ -108,6 +113,84 @@ export class CvService {
 
     const saved = await this.cvRepository.saveCv(cv, manager);
     return { cvId: saved.id, isComplete: saved.isComplete };
+  }
+
+  /** Saves the durable analysis and seeds every high-confidence section into the device's CV atomically. */
+  saveAnalysis(deviceId: string, uploadId: string, analysis: CvAnalysisResult): Promise<void> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.cvRepository.upsertAnalysis({
+        id: generateId('cva'),
+        deviceId,
+        uploadId,
+        cv: analysis.cv,
+        sectionConfidence: analysis.sectionConfidence,
+        seniority: analysis.seniority,
+        yearsOfExperience: analysis.yearsOfExperience,
+        skills: analysis.skills,
+        domains: analysis.domains,
+        strengths: analysis.strengths,
+        gaps: analysis.gaps,
+        qualityIssues: analysis.qualityIssues,
+        overallScore: analysis.overallScore,
+        scoreReason: analysis.scoreReason,
+      }, manager);
+
+      let cv = await this.cvRepository.findByDeviceId(deviceId, manager);
+      if (!cv) {
+        cv = await this.cvRepository.createCv(
+          {
+            id: generateId('cv'),
+            deviceId,
+            isComplete: false,
+            confirmedSections: [],
+            name: null,
+            title: null,
+            contact: null,
+            summary: null,
+          },
+          manager,
+        );
+      }
+
+      await this.cvRepository.deleteSectionsByCvId(cv.id, manager);
+      cv.confirmedSections = [];
+      cv.isComplete = false;
+      cv.name = null;
+      cv.title = null;
+      cv.contact = null;
+      cv.summary = null;
+
+      for (const section of Object.keys(analysis.sectionConfidence) as SectionId[]) {
+        if (analysis.sectionConfidence[section] !== 'high') continue;
+        const content = analysis.cv[section];
+        await this.cvRepository.upsertSection(cv.id, section, content, manager);
+        cv.confirmedSections.push(section);
+
+        if (section === 'basic') {
+          const basic = analysis.cv.basic;
+          cv.name = basic.name;
+          cv.title = basic.title;
+          cv.contact = {
+            phone: basic.phone ?? undefined,
+            email: basic.email ?? undefined,
+            location: basic.location ?? undefined,
+          };
+        }
+      }
+
+      cv.isComplete = !Object.values(analysis.sectionConfidence).includes('low');
+      await this.cvRepository.saveCv(cv, manager);
+    });
+  }
+
+  async getAnalysisForDevice(deviceId: string): Promise<CvAnalysisResponseDto | null> {
+    const analysis = await this.cvRepository.findAnalysisByDeviceId(deviceId);
+    return analysis ? toCvAnalysisResponseDto(analysis) : null;
+  }
+
+  async getAnalysisForUpload(uploadId: string, deviceId: string): Promise<CvAnalysisResponseDto | null> {
+    const analysis = await this.cvRepository.findAnalysisByUploadId(uploadId, deviceId);
+    return analysis ? toCvAnalysisResponseDto(analysis) : null;
   }
 
   async getForDevice(deviceId: string): Promise<CvResponseDto> {
