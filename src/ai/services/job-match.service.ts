@@ -3,6 +3,7 @@ import { delay } from '../../common/delay.js';
 import { EXTRACTION_LLM_PROVIDER, type LlmProvider } from '../../integrations/llm/llm.interface.js';
 import { buildJobMatchPrompt } from '../prompts/job-match.prompt.js';
 import { jobMatchEnvelopeSchema, jobMatchItemSchema, type JobMatchExplanation, type MatchCandidate, type MatchJob } from '../schemas/job-match.schema.js';
+import { candidateFactsText, isTraceableReason } from './why-match-guard.js';
 
 /** Small batches keep each reply short (fast, and less for the model to drop), and let several run at once. */
 const BATCH_SIZE = 7;
@@ -91,6 +92,8 @@ export class JobMatchService {
 
   private async explainBatch(candidate: MatchCandidate, batch: MatchJob[]): Promise<JobMatchExplanation[]> {
     const explained = new Map<string, JobMatchExplanation>();
+    const facts = candidateFactsText(candidate);
+    let untracedReasons = 0;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const missing = batch.filter((job) => !explained.has(job.id));
@@ -128,7 +131,15 @@ export class JobMatchService {
       for (const item of envelope.data.matches) {
         const result = jobMatchItemSchema.safeParse(item);
         if (result.success && wanted.has(result.data.jobId) && !explained.has(result.data.jobId)) {
-          explained.set(result.data.jobId, { ...result.data, gaps: dropJuniorGaps(dropMetYearsGaps(result.data.gaps, candidate.yearsOfExperience), candidate.seniority) });
+          // A reason whose facts aren't in the candidate's data is dropped, never shown (see why-match-guard.ts).
+          // A job left with no reason at all is a non-fit, which matching already hides.
+          const whyMatch = result.data.whyMatch.filter((line) => isTraceableReason(line, facts, candidate.yearsOfExperience));
+          untracedReasons += result.data.whyMatch.length - whyMatch.length;
+          explained.set(result.data.jobId, {
+            ...result.data,
+            whyMatch,
+            gaps: dropJuniorGaps(dropMetYearsGaps(result.data.gaps, candidate.yearsOfExperience), candidate.seniority),
+          });
         } else {
           // Paths and rule names only — never the item's text.
           rejections.push(result.success ? 'unknown or duplicate jobId' : result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', '));
@@ -139,6 +150,10 @@ export class JobMatchService {
       }
     }
 
+    if (untracedReasons) {
+      // A count only — never the lines themselves (they'd carry CV content).
+      this.logger.warn(`Job match: dropped ${untracedReasons} reason(s) naming something that isn't in the CV.`);
+    }
     const unexplained = batch.length - explained.size;
     if (unexplained) {
       this.logger.warn(`Job match gave up on ${unexplained} of ${batch.length} job(s) after ${MAX_ATTEMPTS} attempts.`);

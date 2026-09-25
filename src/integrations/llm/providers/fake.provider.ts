@@ -39,8 +39,9 @@ function buildFakeJobMatchReply(userContent: string): Record<string, unknown> {
       return {
         jobId: job.id,
         match: Math.min(95, 45 + shared.length * 8),
-        whyMatch: shared.length ? [`خبرتك في ${shared.slice(0, 2).join(' و')} (fake)`] : ['المجال قريب من خبرتك (fake)'],
-        gaps: shared.length < 3 ? ['مش واضح إن عندك كل المهارات المطلوبة (fake)'] : [],
+        // Only words taken from the candidate — the fact check on reasons (why-match-guard.ts) drops anything else.
+        whyMatch: shared.length ? [`خبرتك في ${shared.slice(0, 2).join(' و')} (تجريبي)`] : [],
+        gaps: shared.length < 3 ? ['مش واضح إن عندك كل المهارات المطلوبة (تجريبي)'] : [],
       };
     }),
   };
