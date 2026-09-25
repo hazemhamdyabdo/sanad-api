@@ -12,73 +12,25 @@
   },
   "jobs": [
     {
-      "id": "job_c3f1cae19d254ec3a36400db9db4c1c6",
-      "title": "AI Engineer (m/w/d)",
-      "company": "Isar Robotics GmbH",
+      "id": "job_7442f38144054e96bc6f3c3209fd8ea0",
+      "title": "Machine Learning Engineer (m/w/d)",
+      "company": "Rheinwerk Digital AG",
       "location": "München, Deutschland",
+      "locations": [
+        "München, Deutschland",
+        "Frankfurt am Main"
+      ],
       "country": "DE",
       "city": "munich",
       "employmentType": "full_time",
       "workType": "hybrid",
       "postedAt": "2026-09-21T00:00:00.000Z",
       "match": 90,
-      "roleMatch": "exact",
-      "whyMatch": [
-        "خبرة Python وPyTorch",
-        "خبرة LLMs and RAG",
-        "خبرة 4 سنوات"
-      ],
-      "gaps": [
-        "يفضّل لغة ألماني"
-      ],
-      "apply": {
-        "method": "email",
-        "url": "https://example.com/jobs/fake-ai-engineer-germany-2",
-        "email": "karriere@isar-robotics-gmbh.example.com"
-      },
-      "application": null
-    },
-    {
-      "id": "job_e8109c373523427aad304ed790b3747e",
-      "title": "Junior AI Engineer (m/f/d)",
-      "company": "Rheinwerk Digital AG",
-      "location": "Berlin, Deutschland",
-      "country": "DE",
-      "city": "berlin",
-      "employmentType": "full_time",
-      "workType": "on_site",
-      "postedAt": "2026-09-20T00:00:00.000Z",
-      "match": 85,
-      "roleMatch": "exact",
-      "whyMatch": [
-        "خبرة Python",
-        "خبرة LLMs and RAG",
-        "خبرة 4 سنوات"
-      ],
-      "gaps": [],
-      "apply": {
-        "method": "external",
-        "url": "https://example.com/jobs/fake-ai-engineer-germany-1",
-        "email": null
-      },
-      "application": null
-    },
-    {
-      "id": "job_f175d15e7d654ef8a99050cf8e35623d",
-      "title": "Machine Learning Engineer (m/w/d)",
-      "company": "Rheinwerk Digital AG",
-      "location": "München, Deutschland",
-      "country": "DE",
-      "city": "munich",
-      "employmentType": "full_time",
-      "workType": "hybrid",
-      "postedAt": "2026-09-21T00:00:00.000Z",
-      "match": 85,
       "roleMatch": "adjacent",
       "whyMatch": [
-        "خبرة Python وPyTorch",
-        "خبرة scikit-learn",
-        "خبرة 4 سنوات"
+        "4 سنين خبرة Python",
+        "خبرة PyTorch",
+        "خبرة scikit-learn"
       ],
       "gaps": [
         "يفضّل لغة ألماني"
@@ -91,72 +43,58 @@
       "application": null
     },
     {
-      "id": "job_a14f9560bb264d3098c8025d74aaf72f",
-      "title": "Junior Machine Learning Engineer (m/f/d)",
-      "company": "Nordlicht Analytics GmbH",
-      "location": "Berlin, Deutschland",
-      "country": "DE",
-      "city": "berlin",
-      "employmentType": "full_time",
-      "workType": "on_site",
-      "postedAt": "2026-09-20T00:00:00.000Z",
-      "match": 75,
-      "roleMatch": "adjacent",
-      "whyMatch": [
-        "خبرة Python وPyTorch",
-        "خبرة 4 سنوات"
-      ],
-      "gaps": [],
-      "apply": {
-        "method": "external",
-        "url": "https://example.com/jobs/fake-machine-learning-engineer-germany-1",
-        "email": null
-      },
-      "application": null
-    },
-    {
-      "id": "job_5441cfe241db4978975d825c6ee9c03e",
-      "title": "Junior Data Scientist (m/f/d)",
-      "company": "Spree Mobility GmbH",
-      "location": "Berlin, Deutschland",
-      "country": "DE",
-      "city": "berlin",
-      "employmentType": "full_time",
-      "workType": "on_site",
-      "postedAt": "2026-09-20T00:00:00.000Z",
-      "match": 75,
-      "roleMatch": "adjacent",
-      "whyMatch": [
-        "خبرة Python متقدمة",
-        "خبرة SQL",
-        "4 سنين خبرة"
-      ],
-      "gaps": [],
-      "apply": {
-        "method": "external",
-        "url": "https://example.com/jobs/fake-data-scientist-germany-1",
-        "email": null
-      },
-      "application": null
-    },
-    {
-      "id": "job_7b6d140d91454c26946fdcde8160e5da",
-      "title": "Data Scientist (m/w/d)",
-      "company": "Nordlicht Analytics GmbH",
+      "id": "job_0315b519bafa4260b1dff1844ea983c1",
+      "title": "AI Engineer (m/w/d)",
+      "company": "Isar Robotics GmbH",
       "location": "München, Deutschland",
+      "locations": [
+        "München, Deutschland",
+        "Frankfurt am Main"
+      ],
       "country": "DE",
       "city": "munich",
       "employmentType": "full_time",
       "workType": "hybrid",
       "postedAt": "2026-09-21T00:00:00.000Z",
-      "match": 70,
-      "roleMatch": "adjacent",
+      "match": 85,
+      "roleMatch": "exact",
       "whyMatch": [
-        "خبرة Python",
-        "خبرة SQL",
-        "خبرة 4 سنوات"
+        "4 سنين خبرة Python",
+        "خبرة PyTorch",
+        "خبرة LLMs and RAG"
       ],
       "gaps": [
+        "يفضّل لغة ألماني"
+      ],
+      "apply": {
+        "method": "email",
+        "url": "https://example.com/jobs/fake-ai-engineer-germany-2",
+        "email": "karriere@isar-robotics-gmbh.example.com"
+      },
+      "application": null
+    },
+    {
+      "id": "job_1c268f916b1449cf99580265d2fbaddf",
+      "title": "Data Scientist (m/w/d)",
+      "company": "Nordlicht Analytics GmbH",
+      "location": "München, Deutschland",
+      "locations": [
+        "München, Deutschland",
+        "Frankfurt am Main"
+      ],
+      "country": "DE",
+      "city": "munich",
+      "employmentType": "full_time",
+      "workType": "hybrid",
+      "postedAt": "2026-09-21T00:00:00.000Z",
+      "match": 75,
+      "roleMatch": "adjacent",
+      "whyMatch": [
+        "4 سنين خبرة Python",
+        "خبرة SQL"
+      ],
+      "gaps": [
+        "مطلوب خبرة statistics",
         "يفضّل لغة ألماني"
       ],
       "apply": {
@@ -167,10 +105,94 @@
       "application": null
     },
     {
-      "id": "job_a5986639acd84fe6b8315bb778b42f1f",
+      "id": "job_1d76b71097f943db9d2d38d23f276291",
+      "title": "Junior Data Scientist (m/f/d)",
+      "company": "Spree Mobility GmbH",
+      "location": "Berlin, Deutschland",
+      "locations": [
+        "Berlin, Deutschland"
+      ],
+      "country": "DE",
+      "city": "berlin",
+      "employmentType": "full_time",
+      "workType": "on_site",
+      "postedAt": "2026-09-20T00:00:00.000Z",
+      "match": 75,
+      "roleMatch": "adjacent",
+      "whyMatch": [
+        "4 سنين خبرة Python",
+        "4 سنين خبرة SQL"
+      ],
+      "gaps": [],
+      "apply": {
+        "method": "external",
+        "url": "https://example.com/jobs/fake-data-scientist-germany-1",
+        "email": null
+      },
+      "application": null
+    },
+    {
+      "id": "job_45b107c6e67547adac42c46c25953c5f",
+      "title": "Junior AI Engineer (m/f/d)",
+      "company": "Rheinwerk Digital AG",
+      "location": "Berlin, Deutschland",
+      "locations": [
+        "Berlin, Deutschland"
+      ],
+      "country": "DE",
+      "city": "berlin",
+      "employmentType": "full_time",
+      "workType": "on_site",
+      "postedAt": "2026-09-20T00:00:00.000Z",
+      "match": 70,
+      "roleMatch": "exact",
+      "whyMatch": [
+        "4 سنين خبرة Python",
+        "خبرة LLMs and RAG"
+      ],
+      "gaps": [],
+      "apply": {
+        "method": "external",
+        "url": "https://example.com/jobs/fake-ai-engineer-germany-1",
+        "email": null
+      },
+      "application": null
+    },
+    {
+      "id": "job_7542109fb4044047a31d8fbcd657254a",
+      "title": "Junior Machine Learning Engineer (m/f/d)",
+      "company": "Nordlicht Analytics GmbH",
+      "location": "Berlin, Deutschland",
+      "locations": [
+        "Berlin, Deutschland"
+      ],
+      "country": "DE",
+      "city": "berlin",
+      "employmentType": "full_time",
+      "workType": "on_site",
+      "postedAt": "2026-09-20T00:00:00.000Z",
+      "match": 70,
+      "roleMatch": "adjacent",
+      "whyMatch": [
+        "4 سنين خبرة Python",
+        "خبرة PyTorch"
+      ],
+      "gaps": [],
+      "apply": {
+        "method": "external",
+        "url": "https://example.com/jobs/fake-machine-learning-engineer-germany-1",
+        "email": null
+      },
+      "application": null
+    },
+    {
+      "id": "job_04fdda7a817a45af856db247092a4060",
       "title": "Senior AI Engineer (m/w/d)",
       "company": "Elbe Health Tech GmbH",
       "location": "Hamburg, Deutschland",
+      "locations": [
+        "Hamburg, Deutschland"
+      ],
       "country": "DE",
       "city": "hamburg",
       "employmentType": "full_time",
@@ -179,14 +201,14 @@
       "match": 60,
       "roleMatch": "exact",
       "whyMatch": [
-        "خبرة Python وPyTorch",
-        "خبرة LLMs and RAG",
-        "شهادة AWS Certified Machine Learning"
+        "4 سنين خبرة Python",
+        "خبرة PyTorch",
+        "خبرة LLMs and RAG"
       ],
       "gaps": [
-        "مطلوب 5+ سنوات خبرة",
+        "مطلوب 5+ سنين خبرة",
         "مطلوب لغة ألماني C1",
-        "مطلوب خبرة في قيادة فرق"
+        "مطلوب خبرة MLOps"
       ],
       "apply": {
         "method": "external",
@@ -196,24 +218,27 @@
       "application": null
     },
     {
-      "id": "job_09e435cef7214c25a63e2b3bdcd34fce",
+      "id": "job_2ef068eaddbd4ba5960a093fdfc09284",
       "title": "Senior Machine Learning Engineer (m/w/d)",
       "company": "Isar Robotics GmbH",
       "location": "Hamburg, Deutschland",
+      "locations": [
+        "Hamburg, Deutschland"
+      ],
       "country": "DE",
       "city": "hamburg",
       "employmentType": "full_time",
       "workType": "remote",
       "postedAt": "2026-09-22T00:00:00.000Z",
-      "match": 55,
+      "match": 50,
       "roleMatch": "adjacent",
       "whyMatch": [
-        "خبرة Python وPyTorch",
-        "خبرة scikit-learn",
-        "شهادة AWS Certified Machine Learning"
+        "4 سنين خبرة Python",
+        "خبرة PyTorch",
+        "خبرة scikit-learn"
       ],
       "gaps": [
-        "مطلوب 5+ سنوات خبرة",
+        "مطلوب 5+ سنين خبرة",
         "مطلوب لغة ألماني C1",
         "مطلوب خبرة Kubernetes"
       ],
@@ -225,10 +250,13 @@
       "application": null
     },
     {
-      "id": "job_8bc2116f99ed448c89446f05ed8ca98d",
+      "id": "job_945bce50cbc84a69867dc07af4a73490",
       "title": "Senior Data Scientist (m/w/d)",
       "company": "Rheinwerk Digital AG",
       "location": "Hamburg, Deutschland",
+      "locations": [
+        "Hamburg, Deutschland"
+      ],
       "country": "DE",
       "city": "hamburg",
       "employmentType": "full_time",
@@ -237,9 +265,8 @@
       "match": 40,
       "roleMatch": "adjacent",
       "whyMatch": [
-        "خبرة Python متقدمة",
-        "خبرة SQL",
-        "شهادة AWS Certified Machine Learning"
+        "4 سنين خبرة Python",
+        "4 سنين خبرة SQL"
       ],
       "gaps": [
         "مطلوب 5 سنين خبرة",

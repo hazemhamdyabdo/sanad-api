@@ -1,5 +1,5 @@
 {
-  "uploadId": "upl_381592253ceb4406980e9523841bd7a7",
+  "uploadId": "upl_d56e1cd78a7d42d2acc8359a75ea9653",
   "status": "done",
   "currentStage": "checking",
   "analysis": {
@@ -132,12 +132,12 @@
         {
           "name": "Docker",
           "level": "intermediate",
-          "yearsUsed": 1
+          "yearsUsed": 2
         },
         {
           "name": "AWS",
           "level": "intermediate",
-          "yearsUsed": 1
+          "yearsUsed": 2
         },
         {
           "name": "Airflow",
@@ -148,6 +148,11 @@
           "name": "pgvector",
           "level": "intermediate",
           "yearsUsed": 1
+        },
+        {
+          "name": "PostgreSQL",
+          "level": "intermediate",
+          "yearsUsed": 2
         }
       ],
       "technical": [
@@ -174,7 +179,7 @@
         {
           "name": "FastAPI",
           "level": "advanced",
-          "yearsUsed": 1
+          "yearsUsed": 2
         },
         {
           "name": "SQL",
@@ -197,9 +202,14 @@
           "yearsUsed": 2
         },
         {
-          "name": "BERT",
+          "name": "NLP",
           "level": "advanced",
-          "yearsUsed": 1
+          "yearsUsed": 4
+        },
+        {
+          "name": "LLM",
+          "level": "advanced",
+          "yearsUsed": 2
         }
       ]
     },
@@ -212,27 +222,32 @@
     ],
     "strengths": [
       "خبرة قوية في تطوير نماذج NLP وLLM وتطبيقها في منتجات حقيقية",
-      "قدرة على بناء أنظمة كاملة من البيانات إلى APIات الإنتاج",
-      "خبرة في تحسين نماذج التعلم الآلي وتقليل الوقت اليدوي (زي 35% في triage)",
-      "استخدام أدوات حديثة زي LangChain وHugging Face وFastAPI"
+      "قدرة على بناء أنابيب البيانات (data pipelines) من الصفر",
+      "خبرة في نشر النماذج كخدمات API باستخدام FastAPI وDocker",
+      "استخدام أدوات حديثة زي LangChain وHugging Face Transformers",
+      "تحسين كفاءة العمليات (زي تقليل وقت الفرز اليدوي بنسبة 35%)"
     ],
     "gaps": [
-      "مفيش خبرة واضحة في إدارة فرق أو قيادة مشاريع كبيرة",
-      "مفيش تفاصيل عن مهارات التواصل أو العمل الجماعي",
-      "مفيش شهادات أو دورات إضافية غير AWS ML Specialty"
+      "مفيش ذكر لمشاريع أو خبرات في مجالات خارج NLP/ML (زي computer vision أو data engineering)",
+      "مفيش تفاصيل عن دوراته التدريبية أو التعلم المستمر خارج الشهادات",
+      "مفيش ذكر لمهارات إدارة الفريق أو العمل الجماعي (soft skills)"
     ],
     "qualityIssues": [
       {
         "type": "no_metrics",
-        "description": "مفيش أرقام أو مقاييس واضحة في قسم المشاريع (زي Arabic Speech-to-Text Demo)"
+        "description": "مفيش أرقام أو مقاييس واضحة في قسم Vezeeta (مثلا: نسبة تحسين في XGBoost أو تأثير NER)"
       },
       {
         "type": "inconsistent_dates",
-        "description": "تاريخ شهادة AWS مش مذكور"
+        "description": "تاريخ شهادة AWS مفقود"
+      },
+      {
+        "type": "generic_summary",
+        "description": "ملخص السيرة الذاتية عام قليلا ومحتاج تفاصيل أكثر عن الإنجازات"
       }
     ],
     "overallScore": 85,
-    "scoreReason": "CV واضح ومفصل في الخبرة الفنية، بس فيه بعض مشاكل التنسيق (ATS) ونقص في المقاييس في المشاريع والشهادات."
+    "scoreReason": "CV واضح ومنظم، فيه تفاصيل تقنية قوية وخبرة عملية جيدة، بس فيه بعض مشاكل ATS وصياغة عامة في بعض الأجزاء"
   },
   "error": null
 }

@@ -10,6 +10,7 @@ import { resolveCity } from './cities.js';
 import { buildJobEmbeddingText } from './embedding-text.js';
 import type { Job } from './entities/job.entity.js';
 import type { RoleIngestionStatus } from './entities/role-ingestion-cache.entity.js';
+import { isInMarket } from './job-country.js';
 import { deriveEmploymentType, deriveWorkType } from './job-facets.js';
 import { JobRepository, type SimilarJobRow, type SimilarJobsFilter, type UnenrichedJobRow } from './job.repository.js';
 import { RoleIngestionRepository } from './role-ingestion.repository.js';
@@ -124,7 +125,13 @@ export class JobsService {
    * `enrichPendingJobs`.
    */
   async upsertProviderJobs(jobs: ProviderJob[], role: RoleDefinition, country: TargetCountry, provider: string): Promise<number> {
-    for (const job of jobs) {
+    // The market isn't the job's country (de.jooble.org returns Austrian listings too) — a listing
+    // located in another country is never stored under this one.
+    const inMarket = jobs.filter((job) => isInMarket(country, job.location));
+    if (inMarket.length < jobs.length) {
+      this.logger.log(`Skipped ${jobs.length - inMarket.length} listing(s) located outside ${country}.`);
+    }
+    for (const job of inMarket) {
       const { method, email } = resolveApplyMethod(job.snippet);
       await this.jobRepository.upsert({
         provider,
@@ -146,7 +153,7 @@ export class JobsService {
         raw: job.raw,
       });
     }
-    return jobs.length;
+    return inMarket.length;
   }
 
   /**

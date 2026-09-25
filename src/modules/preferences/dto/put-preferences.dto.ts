@@ -3,16 +3,16 @@ import { WORK_TYPES, WORLDWIDE, type WorkType } from '../../../common/types/cont
 
 export class PutPreferencesDto {
   @IsString()
-  @Matches(new RegExp(`^([A-Z]{2}|${WORLDWIDE})$`))
+  @Matches(new RegExp(`^([A-Z]{2}|${WORLDWIDE})$`), { message: 'اختار الدولة من القايمة' })
   country!: string;
 
   @ValidateIf((dto: PutPreferencesDto) => dto.city !== null && dto.city !== undefined)
   @IsString()
-  @Matches(/^[a-z_]+$/)
+  @Matches(/^[a-z_]+$/, { message: 'اختار المدينة من القايمة' })
   city!: string | null;
 
   @IsArray()
-  @ArrayMinSize(1)
+  @ArrayMinSize(1, { message: 'اختار نوع شغل واحد على الأقل' })
   @ArrayUnique()
   @IsIn(WORK_TYPES, { each: true })
   workTypes!: WorkType[];

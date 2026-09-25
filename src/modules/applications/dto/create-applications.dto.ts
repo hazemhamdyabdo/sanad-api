@@ -4,10 +4,10 @@ import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsString } from 'clas
 export const MAX_JOBS_PER_REQUEST = 20;
 
 export class CreateApplicationsDto {
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(MAX_JOBS_PER_REQUEST)
-  @ArrayUnique()
+  @IsArray({ message: 'اختار الوظايف اللي عايز تقدّم عليها الأول' })
+  @ArrayMinSize(1, { message: 'اختار وظيفة واحدة على الأقل' })
+  @ArrayMaxSize(MAX_JOBS_PER_REQUEST, { message: `تقدر تقدّم على ${MAX_JOBS_PER_REQUEST} وظيفة بالكتير في المرة الواحدة — شيل شوية وجرّب تاني` })
+  @ArrayUnique({ message: 'في وظيفة متكررة في اختياراتك' })
   @IsString({ each: true })
   jobIds!: string[];
 }

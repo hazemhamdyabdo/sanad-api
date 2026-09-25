@@ -7,7 +7,7 @@ import { INTERNAL_ERROR_BODY, toErrorBody, type ErrorBody } from '../errors/to-e
 const GENERIC_BY_STATUS: Record<number, ErrorBody> = {
   [HttpStatus.BAD_REQUEST]: {
     code: 'INVALID_REQUEST',
-    message: 'البيانات اللي بعتها مش صحيحة',
+    message: 'في حاجة في الطلب مش مظبوطة، جرّب تاني',
     retryable: false,
   },
   [HttpStatus.NOT_FOUND]: {
@@ -18,7 +18,7 @@ const GENERIC_BY_STATUS: Record<number, ErrorBody> = {
   // Multer's size limit (e.g. an audio upload over 10MB) surfaces as a 413.
   [HttpStatus.PAYLOAD_TOO_LARGE]: {
     code: 'UNSUPPORTED_FILE',
-    message: 'الملف أكبر من الحجم المسموح',
+    message: 'الملف أكبر من 10 ميجا — اختار ملف أصغر',
     retryable: false,
   },
   [HttpStatus.TOO_MANY_REQUESTS]: {

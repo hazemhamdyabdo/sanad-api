@@ -7,6 +7,8 @@ export interface MatchedJobDto {
   title: string;
   company: string | null;
   location: string | null;
+  /** Every place this job is posted — the same job listed for several cities is one entry. `location` first; [] when unknown. */
+  locations: string[];
   country: string;
   city: string | null;
   employmentType: EmploymentType;

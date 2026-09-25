@@ -38,21 +38,49 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Everything the explainer saw about the candidate, as one lowercase text. */
+/** Common abbreviations and what they stand for — "ML" in a reason is the CV's "Machine Learning", and the other way round. */
+const ABBREVIATIONS: Array<[string, string]> = [
+  ['ai', 'artificial intelligence'],
+  ['ml', 'machine learning'],
+  ['dl', 'deep learning'],
+  ['nlp', 'natural language processing'],
+  ['llm', 'large language model'],
+  // CVs spell RAG out as "retrieval-augmented generation / question answering / search".
+  ['rag', 'retrieval-augmented'],
+  ['rag', 'retrieval augmented'],
+  ['genai', 'generative ai'],
+  ['bi', 'business intelligence'],
+  ['hr', 'human resources'],
+];
+
+/** Everything the explainer saw about the candidate, as one lowercase text — plus each abbreviation's other form, so either spelling traces. */
 export function candidateFactsText(candidate: MatchCandidate): string {
-  return JSON.stringify(candidate).toLowerCase();
+  const text = JSON.stringify(candidate).toLowerCase();
+  const extra = ABBREVIATIONS.flatMap(([short, long]) => {
+    if (new RegExp(`(^|[^a-z0-9])${short}($|[^a-z0-9])`).test(text)) return [long];
+    return text.includes(long) ? [short] : [];
+  });
+  return extra.length ? `${text} ${extra.join(' ')}` : text;
 }
 
 function isTraced(term: string, facts: string, yearsOfExperience: number | null): boolean {
   if (/^\d+(\.\d+)?$/.test(term)) {
     return Number(term) === yearsOfExperience || new RegExp(`(^|[^0-9])${escapeRegExp(term)}($|[^0-9])`).test(facts);
   }
-  const root = stem(term.replace(/[.-]+$/, ''));
+  const word = term.replace(/[.-]+$/, '');
+  // As written, stemmed, and singular — "LLMs" is too short to stem but is still the CV's "LLM".
+  const forms = new Set([word, stem(word), word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word]);
+  return [...forms].some((form) => isInFacts(form, facts));
+}
+
+function isInFacts(form: string, facts: string): boolean {
   // Short terms ("ai", "ml", "sql") must stand alone — "ml" inside "html" is not ML experience.
-  if (root.length <= 3) {
-    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(root)}($|[^a-z0-9])`).test(facts);
+  if (form.length <= 3) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(form)}($|[^a-z0-9])`).test(facts);
   }
-  return facts.includes(root);
+  // "fine-tuning" is the CV's "fine tuned" or "finetuned" too.
+  const spellings = form.includes('-') ? [form, form.replace(/-/g, ' '), form.replace(/-/g, '')] : [form];
+  return spellings.some((spelling) => facts.includes(spelling));
 }
 
 /** True when the line names at least one fact and every fact in it is in the candidate's data. */

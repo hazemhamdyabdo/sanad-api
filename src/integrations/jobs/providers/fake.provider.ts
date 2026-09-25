@@ -112,18 +112,21 @@ export class FakeJobProvider implements JobProvider {
 /**
  * Germany as the real German market looks: titles carry "(m/w/d)", most listings are written in
  * German (one English, as Berlin tech often is), one asks for German at C1, one takes applications
- * by email ("Bewerbung per E-Mail"). Exercises cross-language matching and the German facets.
+ * by email ("Bewerbung per E-Mail"). Like the real German feed, the mid-level job is posted twice
+ * (a second city, same company and title) and one listing is actually in Austria — exercises
+ * cross-language matching, the German facets, duplicate collapsing and the market filter.
  */
 function germanListings(query: JobSearchQuery, baseTitle: string, skills: string[], cities: string[]): JobSearchResult {
-  const make = (index: number, title: string, snippet: string, jobType: string): ProviderJob => {
+  const make = (index: number, title: string, snippet: string, jobType: string, place?: { city: string; location: string; companyOf?: number }): ProviderJob => {
     const id = `fake-${slug(query.keywords)}-germany-${index + 1}`;
-    const company = GERMAN_COMPANIES[(index + query.keywords.length) % GERMAN_COMPANIES.length];
+    const company = GERMAN_COMPANIES[((place?.companyOf ?? index) + query.keywords.length) % GERMAN_COMPANIES.length];
+    const city = place?.city ?? cities[index];
     return {
       externalId: id,
       title,
       company,
-      location: `${cities[index]}, Deutschland`,
-      snippet: snippet.replaceAll('{company}', company).replaceAll('{city}', cities[index]).replaceAll('{slug}', slug(company)),
+      location: place?.location ?? `${city}, Deutschland`,
+      snippet: snippet.replaceAll('{company}', company).replaceAll('{city}', city).replaceAll('{slug}', slug(company)),
       salary: null,
       jobType,
       link: `https://example.com/jobs/${id}`,
@@ -135,6 +138,10 @@ function germanListings(query: JobSearchQuery, baseTitle: string, skills: string
   const jobs = [
     make(0, `Junior ${baseTitle} (m/f/d)`, `{company} is looking for a Junior ${baseTitle} to join our team in {city}. You bring first experience (0-2 years) with ${skills.slice(0, 2).join(' and ')}. Our team language is English. On-site in our {city} office. Apply via our careers page.`, 'Full-time'),
     make(1, `${baseTitle} (m/w/d)`, `Für unser Team in {city} suchen wir eine:n ${baseTitle} (m/w/d). Ihre Aufgaben: Entwicklung und Betrieb von Modellen in Produktion. Ihr Profil: mindestens 3 Jahre Berufserfahrung mit ${skills.slice(0, 3).join(', ')}; gute Englischkenntnisse, Deutschkenntnisse von Vorteil. Hybrides Arbeiten: 3 Tage pro Woche im Büro. Bewerbung per E-Mail an karriere@{slug}.example.com.`, 'Vollzeit'),
+    // The same mid-level job, posted again for Frankfurt.
+    make(3, `${baseTitle} (m/w/d)`, `Für unser Team in {city} suchen wir eine:n ${baseTitle} (m/w/d). Ihr Profil: mindestens 3 Jahre Berufserfahrung mit ${skills.slice(0, 3).join(', ')}. Hybrides Arbeiten möglich.`, 'Vollzeit', { city: 'Frankfurt am Main', location: 'Frankfurt am Main', companyOf: 1 }),
+    // Not a German job at all — de.jooble.org returns Austrian listings too.
+    make(4, `${baseTitle} (m/w/d)`, `Wir suchen in Wien eine:n ${baseTitle} (m/w/d) mit Erfahrung in ${skills.slice(0, 2).join(' und ')}.`, 'Vollzeit', { city: 'Wien', location: 'Österreich', companyOf: 4 }),
     make(2, `Senior ${baseTitle} (m/w/d)`, `{company} sucht in {city} eine:n Senior ${baseTitle} (m/w/d). Anforderungen: 5+ Jahre Erfahrung mit ${skills.join(', ')}, Erfahrung in der Führung kleiner Teams, sehr gute Deutschkenntnisse (mindestens C1) und gute Englischkenntnisse. 100% Remote innerhalb Deutschlands möglich.`, 'Vollzeit'),
   ];
   return { jobs, totalCount: jobs.length };

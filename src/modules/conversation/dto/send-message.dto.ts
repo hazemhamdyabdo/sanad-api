@@ -3,7 +3,7 @@ import { MESSAGE_SOURCES, type MessageSource } from '../../../common/types/contr
 
 export class SendMessageDto {
   @IsString()
-  @MinLength(1)
+  @MinLength(1, { message: 'اكتب رسالتك الأول' })
   text!: string;
 
   @IsIn(MESSAGE_SOURCES)

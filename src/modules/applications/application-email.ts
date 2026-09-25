@@ -1,4 +1,5 @@
 import type { CvResponseDto } from '../cv/index.js';
+import { withoutGenderTag } from '../jobs/index.js';
 
 export interface ApplicationEmailContent {
   subject: string;
@@ -13,17 +14,6 @@ function escapeHtml(value: string): string {
 /** Header-safe display name: no quotes, angle brackets or line breaks that could break or inject into a header. */
 export function headerSafe(value: string): string {
   return value.replace(/["<>\r\n]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-/**
- * A listing title without the gender tag German (and Austrian/Swiss) ads carry — "(m/w/d)",
- * "(m/f/d)", "(w/m/x)", "(gn)", "(all genders)" — which reads oddly inside an English sentence.
- */
-export function withoutGenderTag(title: string): string {
-  return title
-    .replace(/\s*[([]\s*(?:[mwfdx](?:\s*[/|,]\s*[mwfdx]){1,3}|gn\*?|all genders?|div)\s*[)\]]/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 /**

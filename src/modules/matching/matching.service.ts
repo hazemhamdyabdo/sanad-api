@@ -7,9 +7,10 @@ import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../../integrations/e
 import { ApplicationsService } from '../applications/index.js';
 import { CvService } from '../cv/index.js';
 import type { Device } from '../device/index.js';
-import { JobsService, TARGET_COUNTRIES, toPlainText, type Job, type RoleDefinition, type TargetCountry } from '../jobs/index.js';
+import { isInMarket, JobsService, TARGET_COUNTRIES, toPlainText, type Job, type RoleDefinition, type TargetCountry } from '../jobs/index.js';
 import { PreferencesService } from '../preferences/index.js';
 import { buildCandidateEmbeddingText, buildMatchCandidate, hashCandidate } from './candidate-profile.js';
+import { collapseDuplicates } from './collapse-duplicates.js';
 import type { JobMatchesResponseDto, MatchedJobDto } from './dto/job-matches-response.dto.js';
 import { MatchingRepository } from './matching.repository.js';
 
@@ -100,10 +101,15 @@ export class MatchingService {
     }
 
     const similarity = new Map(similar.map((row) => [row.id, row.similarity]));
-    // Closest first, so the first batch the LLM explains is the most promising one.
-    const jobs = (await this.jobsService.findJobsByIds(similar.map((row) => row.id))).sort((a, b) => (similarity.get(b.id) ?? 0) - (similarity.get(a.id) ?? 0));
+    const found = (await this.jobsService.findJobsByIds(similar.map((row) => row.id)))
+      // The market isn't the job's country: a listing located elsewhere (an Austrian job from the German feed) never shows.
+      .filter((job) => isInMarket(job.country, job.location))
+      // Closest first, so the first batch the LLM explains is the most promising one.
+      .sort((a, b) => (similarity.get(b.id) ?? 0) - (similarity.get(a.id) ?? 0));
+    const applications = await this.applicationsService.findForJobs(device.id, found.map((job) => job.id));
+    // The same job posted for several cities is one card — explained (and paid for) once.
+    const { jobs, locations } = collapseDuplicates(found, applications);
     const { explanations, pending } = await this.explain(device.id, profile.hash, candidate, jobs);
-    const applications = await this.applicationsService.findForJobs(device.id, jobs.map((job) => job.id));
 
     const matched = jobs
       // A job the model gave no reason for is one it judged a non-fit — never shown, even if its score slipped above the floor.
@@ -111,7 +117,7 @@ export class MatchingService {
         const explanation = explanations.get(job.id);
         return !!explanation && explanation.match >= MIN_MATCH && explanation.whyMatch.length > 0;
       })
-      .map((job) => toMatchedJobDto(job, explanations.get(job.id)!, roleMatchFor(job, targetRole), applications.get(job.id) ?? null))
+      .map((job) => toMatchedJobDto(job, explanations.get(job.id)!, roleMatchFor(job, targetRole), applications.get(job.id) ?? null, locations.get(job.id) ?? []))
       // By score, as the app's list says ("مرتبة حسب التطابق") — the score already weighs how close the
       // role is. Exact role only breaks ties, then vector similarity.
       .sort(
@@ -241,12 +247,14 @@ function toMatchedJobDto(
   explanation: { match: number; whyMatch: string[]; gaps: string[] },
   roleMatch: RoleMatch,
   application: MatchedJobDto['application'],
+  locations: string[],
 ): MatchedJobDto {
   return {
     id: job.id,
     title: job.title,
     company: job.company,
     location: job.location,
+    locations: locations.length ? locations : job.location ? [job.location] : [],
     country: job.country,
     city: job.city,
     employmentType: job.employmentType ?? 'full_time',

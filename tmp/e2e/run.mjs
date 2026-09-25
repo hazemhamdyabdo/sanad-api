@@ -46,11 +46,17 @@ for (;;) {
   await sleep(3000); // the app's new poll interval
 }
 save('4-matches', matches.json);
+for (const j of matches.json.jobs ?? []) console.log(`   ${j.match}% ${j.title} | ${j.company} | locations=${JSON.stringify(j.locations)}
+      why=${JSON.stringify(j.whyMatch)} gaps=${JSON.stringify(j.gaps)}`);
+// Limits: what the app would show if it ever sent these.
+r = await call('POST', '/applications', { jobIds: Array.from({ length: 21 }, (_, i) => `job_${i}`) }); console.log(ts(), 'POST /applications ×21 →', r.status, JSON.stringify(r.json));
+r = await call('PUT', '/preferences', { country: 'DE', city: null, workTypes: [] }); console.log(ts(), 'PUT /preferences workTypes=[] →', r.status, JSON.stringify(r.json));
+r = await call('PUT', '/preferences', { country: 'DE', city: null, workTypes: ['on_site', 'hybrid', 'remote'], willingToRelocate: true });
 // a second call — cache path timing
 r = await call('GET', '/jobs/matches'); console.log(ts(), 'GET /jobs/matches (again)', r.status, `${r.ms}ms`);
 
 // 4. apply to every match
-const ids = (matches.json.jobs ?? []).map((j) => j.id);
+const ids = (matches.json.jobs ?? []).slice(0, 2).map((j) => j.id); // like the user's test: two jobs
 r = await call('POST', '/applications', { jobIds: ids }); console.log(ts(), 'POST /applications', r.status, JSON.stringify(r.json).slice(0, 300));
 const batchId = r.json.batchId; let batch;
 for (;;) { batch = await call('GET', `/applications/batches/${batchId}`); if (batch.json.status !== 'processing') break; await sleep(1500); }

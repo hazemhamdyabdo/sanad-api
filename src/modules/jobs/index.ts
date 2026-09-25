@@ -2,6 +2,8 @@ export { JobsModule } from './jobs.module.js';
 export { JobsService } from './jobs.service.js';
 export { COUNTRY_NAME_EN, TARGET_COUNTRIES, type TargetCountry } from './countries.js';
 export { countryOfLocation } from './cities.js';
+export { isInMarket } from './job-country.js';
+export { listingIdentity, withoutGenderTag } from './listing-identity.js';
 export { ROLE_GROUPS, ROLE_DEFINITIONS, getRoleByCode, type RoleGroupId, type RoleDefinition } from './roles.js';
 export { buildEmbeddingText, groupLabel, type EmbeddingTextParts } from './embedding-text.js';
 export { toPlainText } from './job-facets.js';
