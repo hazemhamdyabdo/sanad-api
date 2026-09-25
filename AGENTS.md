@@ -12,7 +12,7 @@ The Expo mobile app lives in a separate repo (`sanad-client`). This repo is back
 
 Device registration, conversation (SSE), CV built section by section, CV upload and parsing, CV read/update, PDF export.
 
-**Not in scope yet** (see `TODO.md`): jobs, matching, applying, tailoring the CV per job, pgvector, n8n, LangGraph, auth, notifications.
+**Not in scope yet** (see `TODO.md`): matching, applying, tailoring the CV per job, pgvector, n8n, LangGraph, auth, notifications. Job *ingestion* (a curated role list, Jooble as the first provider, budget-tracked caching) has started — see `modules/jobs/`.
 
 ## Key decisions
 

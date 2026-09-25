@@ -33,3 +33,10 @@ export const aiConfig = registerAs('ai', () => ({
   sttProvider: env.STT_PROVIDER,
   sttModel: env.STT_MODEL,
 }));
+
+export const jobsConfig = registerAs('jobs', () => ({
+  provider: env.JOB_PROVIDER,
+  joobleApiKey: env.JOOBLE_API_KEY,
+  joobleMaxCalls: env.JOOBLE_MAX_CALLS,
+  cacheTtlDays: env.JOB_CACHE_TTL_DAYS,
+}));

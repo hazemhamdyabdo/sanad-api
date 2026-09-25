@@ -25,6 +25,17 @@ export const envSchema = z.object({
   // Speech-to-text. Reuses AI_API_KEY — same vendor account as the LLM.
   STT_PROVIDER: z.enum(['mistral', 'fake']).default('fake'),
   STT_MODEL: z.string().default('voxtral-mini-latest'),
+
+  // Job search. "fake" (the default) makes no network calls — Jooble's free plan is a total
+  // LIFETIME limit of 500 requests per key, not a renewing quota, so nothing should ever default to
+  // spending it.
+  JOB_PROVIDER: z.enum(['jooble', 'fake']).default('fake'),
+  JOOBLE_API_KEY: z.string().optional(),
+  // Safety margin under Jooble's real 500-lifetime cap — the ingestion sweep refuses to call once
+  // job_search_calls' row count reaches this, rather than running the account to zero.
+  JOOBLE_MAX_CALLS: z.coerce.number().int().positive().default(450),
+  // How long a role group's ingested jobs are considered fresh before it's eligible to be re-fetched.
+  JOB_CACHE_TTL_DAYS: z.coerce.number().int().positive().default(30),
 });
 
 const envSchemaWithCrossFieldRules = envSchema
@@ -35,6 +46,10 @@ const envSchemaWithCrossFieldRules = envSchema
   .refine((env) => env.STT_PROVIDER !== 'mistral' || !!env.AI_API_KEY, {
     message: 'AI_API_KEY is required when STT_PROVIDER=mistral',
     path: ['AI_API_KEY'],
+  })
+  .refine((env) => env.JOB_PROVIDER !== 'jooble' || !!env.JOOBLE_API_KEY, {
+    message: 'JOOBLE_API_KEY is required when JOB_PROVIDER=jooble',
+    path: ['JOOBLE_API_KEY'],
   });
 
 export type Env = z.infer<typeof envSchema>;

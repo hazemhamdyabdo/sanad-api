@@ -26,6 +26,7 @@
     "migration:run": "tsx ./node_modules/typeorm/cli.js migration:run -d src/database/data-source.ts",
     "migration:revert": "tsx ./node_modules/typeorm/cli.js migration:revert -d src/database/data-source.ts",
     "seed": "tsx src/database/seed.ts",
+    "jobs:seed-roles": "nest build && node dist/modules/jobs/seed-job-roles.js",
     "dev": "node scripts/dev.mjs",
     "dev:api": "node scripts/dev-api.mjs",
     "dev:app": "node scripts/dev-app.mjs",
