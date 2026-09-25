@@ -4,6 +4,6 @@ export declare class JobMatchService {
     private readonly llm;
     private readonly logger;
     constructor(llm: LlmProvider);
-    explain(candidate: MatchCandidate, jobs: MatchJob[]): Promise<Map<string, JobMatchExplanation>>;
+    explain(candidate: MatchCandidate, jobs: MatchJob[], onBatch?: (explained: JobMatchExplanation[]) => Promise<void>): Promise<Map<string, JobMatchExplanation>>;
     private explainBatch;
 }

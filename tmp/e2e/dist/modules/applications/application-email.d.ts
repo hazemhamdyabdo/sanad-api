@@ -5,6 +5,7 @@ export interface ApplicationEmailContent {
     html: string;
 }
 export declare function headerSafe(value: string): string;
+export declare function withoutGenderTag(title: string): string;
 export declare function buildApplicationEmail(cv: CvResponseDto, job: {
     title: string;
     company: string | null;

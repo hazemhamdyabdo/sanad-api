@@ -16,8 +16,8 @@ import { delay } from '../../common/delay.js';
 import { EXTRACTION_LLM_PROVIDER } from '../../integrations/llm/llm.interface.js';
 import { buildJobMatchPrompt } from '../prompts/job-match.prompt.js';
 import { jobMatchEnvelopeSchema, jobMatchItemSchema } from '../schemas/job-match.schema.js';
-const BATCH_SIZE = 8;
-const MAX_CONCURRENT_BATCHES = 3;
+const BATCH_SIZE = 7;
+const MAX_CONCURRENT_BATCHES = 4;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 1_500;
 const MATCH_MAX_TOKENS = 3_000;
@@ -51,7 +51,7 @@ let JobMatchService = JobMatchService_1 = class JobMatchService {
     constructor(llm) {
         this.llm = llm;
     }
-    async explain(candidate, jobs) {
+    async explain(candidate, jobs, onBatch) {
         const batches = [];
         for (let start = 0; start < jobs.length; start += BATCH_SIZE) {
             batches.push(jobs.slice(start, start + BATCH_SIZE));
@@ -61,9 +61,11 @@ let JobMatchService = JobMatchService_1 = class JobMatchService {
         const worker = async () => {
             while (next < batches.length) {
                 const batch = batches[next++];
-                for (const explanation of await this.explainBatch(candidate, batch)) {
+                const explained = await this.explainBatch(candidate, batch);
+                for (const explanation of explained) {
                     results.set(explanation.jobId, explanation);
                 }
+                await onBatch?.(explained);
             }
         };
         await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_BATCHES, batches.length) }, worker));

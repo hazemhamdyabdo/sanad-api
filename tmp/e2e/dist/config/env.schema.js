@@ -2,6 +2,9 @@ import { z } from 'zod';
 export const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
+    DEMO_MODE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+    UPLOAD_DIR: z.string().min(1).default('uploads'),
+    EMAIL_OUTBOX_DIR: z.string().min(1).default('tmp/outbox'),
     DATABASE_HOST: z.string().min(1),
     DATABASE_PORT: z.coerce.number().int().positive().default(5432),
     DATABASE_USER: z.string().min(1),
@@ -33,6 +36,10 @@ export const envSchema = z.object({
     JOB_CACHE_TTL_DAYS: z.coerce.number().int().positive().default(30),
 });
 const envSchemaWithCrossFieldRules = envSchema
+    .refine((env) => !env.DEMO_MODE || !!env.EMAIL_REDIRECT_TO, {
+    message: 'EMAIL_REDIRECT_TO is required when DEMO_MODE=true; use an inbox you control',
+    path: ['EMAIL_REDIRECT_TO'],
+})
     .refine((env) => env.LLM_PROVIDER !== 'mistral' || !!env.AI_API_KEY, {
     message: 'AI_API_KEY is required when LLM_PROVIDER=mistral',
     path: ['AI_API_KEY'],

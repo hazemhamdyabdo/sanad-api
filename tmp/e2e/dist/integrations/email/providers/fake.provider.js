@@ -1,11 +1,14 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Logger } from '@nestjs/common';
-const OUTBOX_DIR = join(process.cwd(), 'tmp', 'outbox');
 export class FakeEmailProvider {
+    outboxDir;
     logger = new Logger(FakeEmailProvider.name);
+    constructor(outboxDir = join(process.cwd(), 'tmp', 'outbox')) {
+        this.outboxDir = outboxDir;
+    }
     async send(email) {
-        const dir = join(OUTBOX_DIR, email.idempotencyKey.replace(/[^\w-]/g, '_'));
+        const dir = join(this.outboxDir, email.idempotencyKey.replace(/[^\w-]/g, '_'));
         await mkdir(dir, { recursive: true });
         await writeFile(join(dir, 'headers.json'), JSON.stringify({ from: email.from, to: email.to, replyTo: email.replyTo, subject: email.subject }, null, 2));
         await writeFile(join(dir, 'message.txt'), email.text);

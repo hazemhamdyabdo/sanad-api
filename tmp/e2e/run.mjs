@@ -41,9 +41,9 @@ console.log(ts(), 'PUT /preferences', r.status, JSON.stringify(r.json)); save('3
 let polls = 0; let matches;
 for (;;) {
   matches = await call('GET', '/jobs/matches'); polls++;
-  console.log(ts(), `GET /jobs/matches #${polls}`, matches.status, matches.json.status, `${matches.json.jobs?.length ?? '-'} jobs`, `${matches.ms}ms`);
+  console.log(ts(), `GET /jobs/matches #${polls}`, matches.status, matches.json.status, `${matches.json.jobs?.length ?? '-'} jobs`, `${matches.ms}ms`, (matches.json.jobs ?? []).map((j) => j.match).join(','));
   if (matches.status !== 200 || matches.json.status !== 'searching') break;
-  await sleep(5000);
+  await sleep(3000); // the app's new poll interval
 }
 save('4-matches', matches.json);
 // a second call — cache path timing

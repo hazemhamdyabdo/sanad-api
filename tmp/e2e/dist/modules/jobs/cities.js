@@ -26,6 +26,14 @@ function containsPhrase(haystack, phrase) {
     const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`, 'u').test(haystack);
 }
+export function countryOfLocation(location) {
+    if (!location) {
+        return null;
+    }
+    const text = location.toLowerCase();
+    const entry = Object.entries(CITIES_BY_COUNTRY).find(([, cities]) => cities.some((city) => city.aliases.some((alias) => containsPhrase(text, alias))));
+    return entry?.[0] ?? null;
+}
 export function resolveCity(country, location) {
     if (!location) {
         return null;

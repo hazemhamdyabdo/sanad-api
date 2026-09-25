@@ -19,6 +19,7 @@ import { generateId } from '../../common/ids.js';
 import { EMAIL_PROVIDER } from '../../integrations/email/email.interface.js';
 import { CvService } from '../cv/index.js';
 import { JobsService, toPlainText } from '../jobs/index.js';
+import { contactForJobCountry } from './application-contact.js';
 import { buildApplicationEmail, headerSafe } from './application-email.js';
 import { ApplicationsRepository } from './applications.repository.js';
 import { toApplicationDto } from './dto/application-response.dto.js';
@@ -236,7 +237,7 @@ let ApplicationsService = ApplicationsService_1 = class ApplicationsService {
                 application.stage = 'tailoring';
                 await this.repository.save(application);
                 const tailored = await this.cvTailorService.tailor(toTailorInput(cv), { title: job.title, company: job.company, description: toPlainText(job.snippet) });
-                application.tailoredCv = applyTailoring(cv, tailored);
+                application.tailoredCv = contactForJobCountry(applyTailoring(cv, tailored), job.country);
                 application.cvTailored = tailored.tailored;
                 await this.repository.save(application);
             }

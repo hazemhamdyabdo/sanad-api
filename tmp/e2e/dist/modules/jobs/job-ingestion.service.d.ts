@@ -10,10 +10,12 @@ export declare class JobIngestionService implements OnModuleInit, OnModuleDestro
     private readonly provider;
     private readonly logger;
     private timer;
+    private sweeping;
     constructor(roleIngestionRepository: RoleIngestionRepository, jobsService: JobsService, configService: ConfigService, provider: JobProvider);
     onModuleInit(): void;
     onModuleDestroy(): void;
     runSweepOnce(): Promise<void>;
+    private sweep;
     private hasBudget;
     private ingestGroup;
 }

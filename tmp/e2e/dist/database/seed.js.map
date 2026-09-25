@@ -1,1 +1,0 @@
-{"version":3,"file":"seed.js","sourceRoot":"","sources":["../../../../src/database/seed.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,aAAa,EAAE,MAAM,kBAAkB,CAAC;AAOjD,KAAK,UAAU,IAAI;IACjB,MAAM,aAAa,CAAC,UAAU,EAAE,CAAC;IACjC,OAAO,CAAC,GAAG,CAAC,2BAA2B,CAAC,CAAC;IACzC,MAAM,aAAa,CAAC,OAAO,EAAE,CAAC;AAChC,CAAC;AAED,MAAM,IAAI,EAAE,CAAC"}

@@ -29,10 +29,12 @@ export const cvAnalysisSchema = z.object({
     domains: z.array(text()),
     strengths: z.array(text()),
     gaps: z.array(text()),
-    qualityIssues: z.array(z.object({
+    qualityIssues: z
+        .array(z.object({
         type: z.enum(QUALITY_ISSUE_TYPES),
         description: text(),
-    })),
+    }))
+        .transform((issues) => issues.filter((issue) => !/&(amp|lt|gt|quot|apos|nbsp|#\d+);/i.test(issue.description))),
     overallScore: z.number().int().min(0).max(100),
     scoreReason: text(),
 });

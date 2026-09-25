@@ -40,7 +40,7 @@ const ERROR_MESSAGES: Record<ApplicationErrorCode, string> = {
   no_candidate_email: 'مفيش إيميل في الـ CV بتاعك، فالشركة مش هتعرف ترد عليك. ضيف إيميلك في الـ CV وجرب تاني.',
   send_failed: 'مقدرناش نبعت الإيميل للشركة دلوقتي، جرب تاني كمان شوية.',
   job_unavailable: 'الوظيفة دي مبقتش متاحة.',
-  internal: 'حصل خطأ واحنا بنقدّم على الوظيفة دي، جرب تاني.',
+  internal: 'حصلت مشكلة عندنا واحنا بنقدّم على الوظيفة دي، جرّب تاني.',
 };
 
 const iso = (date: Date | null) => (date ? date.toISOString() : null);

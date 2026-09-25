@@ -4,16 +4,20 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-import { join } from 'node:path';
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LocalStorageProvider } from './providers/local.provider.js';
 import { STORAGE_PROVIDER } from './storage.interface.js';
-const LOCAL_STORAGE_DIR = join(process.cwd(), 'uploads');
 let StorageModule = class StorageModule {
 };
 StorageModule = __decorate([
     Module({
-        providers: [{ provide: STORAGE_PROVIDER, useValue: new LocalStorageProvider(LOCAL_STORAGE_DIR) }],
+        imports: [ConfigModule],
+        providers: [{
+                provide: STORAGE_PROVIDER,
+                inject: [ConfigService],
+                useFactory: (config) => new LocalStorageProvider(config.get('UPLOAD_DIR', 'uploads')),
+            }],
         exports: [STORAGE_PROVIDER],
     })
 ], StorageModule);

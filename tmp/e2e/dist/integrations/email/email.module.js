@@ -42,7 +42,7 @@ EmailModule = __decorate([
                         base = new ResendEmailProvider(apiKey);
                     }
                     else if (provider === 'fake') {
-                        base = new FakeEmailProvider();
+                        base = new FakeEmailProvider(configService.get('EMAIL_OUTBOX_DIR', 'tmp/outbox'));
                     }
                     else {
                         throw new Error(`Unknown EMAIL_PROVIDER "${String(provider)}" — expected "resend" or "fake".`);

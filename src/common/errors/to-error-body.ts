@@ -9,7 +9,7 @@ export interface ErrorBody {
 
 export const INTERNAL_ERROR_BODY: ErrorBody = {
   code: 'INTERNAL',
-  message: 'حصل خطأ غير متوقع، جرب تاني',
+  message: 'حصلت مشكلة عندنا، جرّب تاني كمان شوية',
   retryable: true,
 };
 

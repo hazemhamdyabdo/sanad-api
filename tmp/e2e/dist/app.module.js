@@ -47,7 +47,7 @@ AppModule = __decorate([
             ApplicationsModule,
             LlmModule,
         ],
-        controllers: [AppController, LlmDebugController],
+        controllers: [AppController, ...(process.env.NODE_ENV === 'production' ? [] : [LlmDebugController])],
         providers: [
             AppService,
             { provide: APP_FILTER, useClass: AllExceptionsFilter },

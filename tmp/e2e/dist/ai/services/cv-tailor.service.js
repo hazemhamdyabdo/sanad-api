@@ -96,7 +96,7 @@ let CvTailorService = CvTailorService_1 = class CvTailorService {
                 const accepted = acceptBullets(entry.bullets, proposedExperience.get(index), [entry.title, entry.company, ...entry.bullets].join('\n'));
                 if (accepted?.some((bullet, position) => bullet !== entry.bullets[position]))
                     acceptedEntries++;
-                else if (entry.bullets.length)
+                else if (!accepted && entry.bullets.length)
                     rejectedEntries++;
                 return accepted ?? entry.bullets;
             });
@@ -104,7 +104,7 @@ let CvTailorService = CvTailorService_1 = class CvTailorService {
                 const accepted = acceptBullets(entry.bullets, proposedProjects.get(index), [entry.title, entry.description, ...entry.bullets].join('\n'));
                 if (accepted?.some((bullet, position) => bullet !== entry.bullets[position]))
                     acceptedEntries++;
-                else if (entry.bullets.length)
+                else if (!accepted && entry.bullets.length)
                     rejectedEntries++;
                 return accepted ?? entry.bullets;
             });

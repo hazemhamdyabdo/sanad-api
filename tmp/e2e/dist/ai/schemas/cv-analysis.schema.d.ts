@@ -141,7 +141,7 @@ export declare const cvAnalysisSchema: z.ZodObject<{
     domains: z.ZodArray<z.ZodString>;
     strengths: z.ZodArray<z.ZodString>;
     gaps: z.ZodArray<z.ZodString>;
-    qualityIssues: z.ZodArray<z.ZodObject<{
+    qualityIssues: z.ZodPipe<z.ZodArray<z.ZodObject<{
         type: z.ZodEnum<{
             employment_gap: "employment_gap";
             weak_bullets: "weak_bullets";
@@ -153,7 +153,13 @@ export declare const cvAnalysisSchema: z.ZodObject<{
             other: "other";
         }>;
         description: z.ZodString;
-    }, z.core.$strip>>;
+    }, z.core.$strip>>, z.ZodTransform<{
+        type: "employment_gap" | "weak_bullets" | "no_metrics" | "ats_formatting" | "inconsistent_dates" | "contact_missing" | "generic_summary" | "other";
+        description: string;
+    }[], {
+        type: "employment_gap" | "weak_bullets" | "no_metrics" | "ats_formatting" | "inconsistent_dates" | "contact_missing" | "generic_summary" | "other";
+        description: string;
+    }[]>>;
     overallScore: z.ZodNumber;
     scoreReason: z.ZodString;
 }, z.core.$strip>;

@@ -13,6 +13,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var MatchingService_1;
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { JOB_MATCH_PROMPT_VERSION, JobMatchService } from '../../ai/index.js';
+import { delay } from '../../common/delay.js';
 import { AppError } from '../../common/errors/app-error.js';
 import { WORLDWIDE } from '../../common/types/contract.js';
 import { EMBEDDING_PROVIDER } from '../../integrations/embeddings/embedding.interface.js';
@@ -26,6 +27,7 @@ const CANDIDATE_LIMIT = 25;
 const MIN_MATCH = 40;
 const MAX_DESCRIPTION_CHARS = 1_500;
 const ROLE_MATCH_RANK = { exact: 0, adjacent: 1, related: 2 };
+const FIRST_RESULTS_WAIT_MS = 2_000;
 let MatchingService = MatchingService_1 = class MatchingService {
     cvService;
     jobsService;
@@ -36,6 +38,7 @@ let MatchingService = MatchingService_1 = class MatchingService {
     embeddings;
     logger = new Logger(MatchingService_1.name);
     inFlight = new Map();
+    explaining = new Map();
     constructor(cvService, jobsService, preferencesService, matchingRepository, jobMatchService, applicationsService, embeddings) {
         this.cvService = cvService;
         this.jobsService = jobsService;
@@ -78,9 +81,9 @@ let MatchingService = MatchingService_1 = class MatchingService {
         if (!similar.length) {
             return { status, preferences, jobs: [] };
         }
-        const jobs = await this.jobsService.findJobsByIds(similar.map((row) => row.id));
-        const explanations = await this.explain(device.id, profile.hash, candidate, jobs);
         const similarity = new Map(similar.map((row) => [row.id, row.similarity]));
+        const jobs = (await this.jobsService.findJobsByIds(similar.map((row) => row.id))).sort((a, b) => (similarity.get(b.id) ?? 0) - (similarity.get(a.id) ?? 0));
+        const { explanations, pending } = await this.explain(device.id, profile.hash, candidate, jobs);
         const applications = await this.applicationsService.findForJobs(device.id, jobs.map((job) => job.id));
         const matched = jobs
             .filter((job) => {
@@ -88,10 +91,10 @@ let MatchingService = MatchingService_1 = class MatchingService {
             return !!explanation && explanation.match >= MIN_MATCH && explanation.whyMatch.length > 0;
         })
             .map((job) => toMatchedJobDto(job, explanations.get(job.id), roleMatchFor(job, targetRole), applications.get(job.id) ?? null))
-            .sort((a, b) => ROLE_MATCH_RANK[a.roleMatch] - ROLE_MATCH_RANK[b.roleMatch] ||
-            b.match - a.match ||
+            .sort((a, b) => b.match - a.match ||
+            ROLE_MATCH_RANK[a.roleMatch] - ROLE_MATCH_RANK[b.roleMatch] ||
             (similarity.get(b.id) ?? 0) - (similarity.get(a.id) ?? 0));
-        return { status, preferences, jobs: matched };
+        return { status: pending ? 'searching' : status, preferences, jobs: matched };
     }
     async loadCandidate(deviceId) {
         const [cv, analysis] = await Promise.all([
@@ -126,22 +129,42 @@ let MatchingService = MatchingService_1 = class MatchingService {
         return { hash, embedding };
     }
     async explain(deviceId, profileHash, candidate, jobs) {
-        const cached = await this.matchingRepository.findExplanations(deviceId, profileHash, jobs.map((job) => job.id));
-        const explanations = new Map(cached.map((row) => [row.jobId, { match: row.match, whyMatch: row.whyMatch, gaps: row.gaps }]));
-        const missing = jobs.filter((job) => !explanations.has(job.id));
+        const readCache = async () => {
+            const rows = await this.matchingRepository.findExplanations(deviceId, profileHash, jobs.map((job) => job.id));
+            return new Map(rows.map((row) => [row.jobId, { match: row.match, whyMatch: row.whyMatch, gaps: row.gaps }]));
+        };
+        const cached = await readCache();
+        const missing = jobs.filter((job) => !cached.has(job.id));
         if (!missing.length) {
-            return explanations;
+            return { explanations: cached, pending: false };
         }
-        const fresh = await this.jobMatchService.explain(candidate, missing.map((job) => ({ id: job.id, title: job.title, company: job.company, description: toPlainText(job.snippet).slice(0, MAX_DESCRIPTION_CHARS) })));
-        await this.matchingRepository.saveExplanations(deviceId, profileHash, [...fresh.values()]);
-        for (const explanation of fresh.values()) {
-            explanations.set(explanation.jobId, explanation);
+        let run = this.explaining.get(deviceId);
+        if (run) {
+            await Promise.race([run, delay(FIRST_RESULTS_WAIT_MS)]);
         }
-        this.logger.log(`Explained ${fresh.size}/${missing.length} new job(s); ${cached.length} from cache.`);
-        if (!explanations.size) {
+        else {
+            let firstBatchIn = () => undefined;
+            const firstBatch = new Promise((resolve) => (firstBatchIn = resolve));
+            run = this.jobMatchService
+                .explain(candidate, missing.map((job) => ({ id: job.id, title: job.title, company: job.company, description: toPlainText(job.snippet).slice(0, MAX_DESCRIPTION_CHARS) })), async (explained) => {
+                await this.matchingRepository.saveExplanations(deviceId, profileHash, explained);
+                firstBatchIn();
+            })
+                .then((fresh) => this.logger.log(`Explained ${fresh.size}/${missing.length} new job(s); ${cached.size} from cache.`))
+                .catch((error) => this.logger.error('Job match explanation run failed', error instanceof Error ? error.stack : error))
+                .finally(() => {
+                this.explaining.delete(deviceId);
+                firstBatchIn();
+            });
+            this.explaining.set(deviceId, run);
+            await firstBatch;
+        }
+        const explanations = await readCache();
+        const pending = this.explaining.has(deviceId);
+        if (!explanations.size && !pending) {
             throw new AppError('AI_UNAVAILABLE', 'مش قادرين نقيّم الوظايف دلوقتي، جرب تاني كمان شوية', { retryable: true });
         }
-        return explanations;
+        return { explanations, pending };
     }
 };
 MatchingService = MatchingService_1 = __decorate([

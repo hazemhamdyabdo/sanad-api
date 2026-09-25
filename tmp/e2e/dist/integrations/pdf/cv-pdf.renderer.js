@@ -74,6 +74,7 @@ function addSection(lines, title) {
 function bulletsOf(item) {
     return Array.isArray(item.bullets) ? item.bullets.map(text).filter(Boolean) : [];
 }
+const LANGUAGE_LEVEL_LABELS = { native: 'Native', expert: 'Fluent', advanced: 'Advanced', intermediate: 'Intermediate', beginner: 'Basic' };
 function buildLines(cv) {
     const lines = [];
     lines.push({ text: text(cv.name).toUpperCase() || 'CURRICULUM VITAE', size: 20, bold: true, gapAfter: 4 });
@@ -126,9 +127,12 @@ function buildLines(cv) {
             lines.push({ text: text(item.name), size: BODY, gapAfter: 2, right: text(item.date) || undefined });
         }
     }
-    const withLevels = (values) => values
+    const withLevels = (values, labels = {}) => values
         .map(plainObject)
-        .map((item) => (text(item.level) ? `${text(item.name)} (${capitalize(text(item.level))})` : text(item.name)))
+        .map((item) => {
+        const level = text(item.level);
+        return level ? `${text(item.name)} (${labels[level.toLowerCase()] ?? capitalize(level)})` : text(item.name);
+    })
         .filter(Boolean)
         .join(', ');
     if (cv.skills.length) {
@@ -137,7 +141,7 @@ function buildLines(cv) {
     }
     if (cv.languages.length) {
         addSection(lines, 'Languages');
-        addParagraph(lines, withLevels(cv.languages));
+        addParagraph(lines, withLevels(cv.languages, LANGUAGE_LEVEL_LABELS));
     }
     return lines;
 }

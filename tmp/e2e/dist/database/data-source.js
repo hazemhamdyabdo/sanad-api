@@ -1,7 +1,11 @@
 import 'reflect-metadata';
 import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
+import { fileURLToPath } from 'node:url';
 config();
+const compiled = import.meta.url.endsWith('.js');
+const sourceRoot = fileURLToPath(new URL('../', import.meta.url)).replace(/\\/g, '/');
+const extension = compiled ? 'js' : 'ts';
 export const AppDataSource = new DataSource({
     type: 'postgres',
     host: process.env.DATABASE_HOST,
@@ -11,7 +15,7 @@ export const AppDataSource = new DataSource({
     database: process.env.DATABASE_NAME,
     ssl: process.env.DATABASE_SSL === 'true',
     synchronize: false,
-    entities: ['src/modules/**/entities/*.entity.ts'],
-    migrations: ['src/database/migrations/*.ts'],
+    entities: [`${sourceRoot}modules/**/entities/*.entity.${extension}`],
+    migrations: [`${sourceRoot}database/migrations/*.${extension}`],
 });
 //# sourceMappingURL=data-source.js.map

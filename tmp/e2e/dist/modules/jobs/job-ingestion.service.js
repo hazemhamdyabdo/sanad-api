@@ -19,7 +19,7 @@ import { JOOBLE_LOCATION_BY_COUNTRY } from './countries.js';
 import { JobsService } from './jobs.service.js';
 import { RoleIngestionRepository } from './role-ingestion.repository.js';
 import { getGroupById, ROLE_DEFINITIONS } from './roles.js';
-const SWEEP_INTERVAL_MS = 60 * 1000;
+const SWEEP_INTERVAL_MS = 5 * 1000;
 const BATCH_SIZE = 5;
 let JobIngestionService = JobIngestionService_1 = class JobIngestionService {
     roleIngestionRepository;
@@ -28,6 +28,7 @@ let JobIngestionService = JobIngestionService_1 = class JobIngestionService {
     provider;
     logger = new Logger(JobIngestionService_1.name);
     timer = null;
+    sweeping = false;
     constructor(roleIngestionRepository, jobsService, configService, provider) {
         this.roleIngestionRepository = roleIngestionRepository;
         this.jobsService = jobsService;
@@ -46,6 +47,18 @@ let JobIngestionService = JobIngestionService_1 = class JobIngestionService {
         }
     }
     async runSweepOnce() {
+        if (this.sweeping) {
+            return;
+        }
+        this.sweeping = true;
+        try {
+            await this.sweep();
+        }
+        finally {
+            this.sweeping = false;
+        }
+    }
+    async sweep() {
         const pending = await this.roleIngestionRepository.findPendingCache(BATCH_SIZE);
         for (const cache of pending) {
             if (!this.provider.supportsCountry(cache.country)) {

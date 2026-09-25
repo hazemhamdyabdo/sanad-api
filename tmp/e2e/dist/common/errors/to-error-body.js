@@ -1,7 +1,7 @@
 import { AppError } from './app-error.js';
 export const INTERNAL_ERROR_BODY = {
     code: 'INTERNAL',
-    message: 'حصل خطأ غير متوقع، جرب تاني',
+    message: 'حصلت مشكلة عندنا، جرّب تاني كمان شوية',
     retryable: true,
 };
 export function toErrorBody(exception) {

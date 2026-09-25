@@ -17,6 +17,7 @@ export declare class MatchingService {
     private readonly embeddings;
     private readonly logger;
     private readonly inFlight;
+    private readonly explaining;
     constructor(cvService: CvService, jobsService: JobsService, preferencesService: PreferencesService, matchingRepository: MatchingRepository, jobMatchService: JobMatchService, applicationsService: ApplicationsService, embeddings: EmbeddingProvider);
     getMatches(device: Device): Promise<JobMatchesResponseDto>;
     private computeMatches;

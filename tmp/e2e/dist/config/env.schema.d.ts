@@ -6,6 +6,12 @@ export declare const envSchema: z.ZodObject<{
         production: "production";
     }>>;
     PORT: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    DEMO_MODE: z.ZodPipe<z.ZodDefault<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>, z.ZodTransform<boolean, "true" | "false">>;
+    UPLOAD_DIR: z.ZodDefault<z.ZodString>;
+    EMAIL_OUTBOX_DIR: z.ZodDefault<z.ZodString>;
     DATABASE_HOST: z.ZodString;
     DATABASE_PORT: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
     DATABASE_USER: z.ZodString;
