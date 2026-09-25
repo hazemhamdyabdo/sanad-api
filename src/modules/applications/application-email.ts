@@ -21,7 +21,7 @@ export function headerSafe(value: string): string {
  */
 export function withoutGenderTag(title: string): string {
   return title
-    .replace(/\s*[(\[]\s*(?:[mwfdx](?:\s*[/|,]\s*[mwfdx]){1,3}|gn\*?|all genders?|div)\s*[)\]]/gi, '')
+    .replace(/\s*[([]\s*(?:[mwfdx](?:\s*[/|,]\s*[mwfdx]){1,3}|gn\*?|all genders?|div)\s*[)\]]/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
