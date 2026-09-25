@@ -14,6 +14,7 @@
 
 export const ROLE_GROUP_IDS = [
   'software_development',
+  'ai_ml',
   'it_support',
   'data_analytics',
   'design_creative',
@@ -64,6 +65,7 @@ export interface RoleDefinition {
 
 export const ROLE_GROUPS: RoleGroup[] = [
   { id: 'software_development', keywords: ['frontend developer', 'backend developer', 'full stack developer', 'mobile app developer'] },
+  { id: 'ai_ml', keywords: ['AI engineer', 'machine learning engineer', 'data scientist'] },
   { id: 'it_support', keywords: ['IT support technician'] },
   { id: 'data_analytics', keywords: ['data analyst'] },
   { id: 'design_creative', keywords: ['graphic designer', 'UI UX designer'] },
@@ -92,6 +94,16 @@ export const ROLE_GROUPS: RoleGroup[] = [
 ];
 
 export const ROLE_DEFINITIONS: RoleDefinition[] = [
+  // ai_ml — its own group, not software_development: a group is fetched together (one provider call
+  // per keyword), so folding these in would make every frontend CV pay for three AI searches and
+  // vice versa; and a group is also what "adjacent" means in matching — a frontend listing is not a
+  // near-miss for an ML engineer, but a data-scientist one is. Listed FIRST on purpose: list order
+  // breaks ties between equally specific phrases, and "Python Developer / Machine Learning" is an AI
+  // profile, not a generic backend one.
+  { code: 'ai_engineer', group: 'ai_ml', keyword: 'AI engineer', labelEn: 'AI Engineer', labelAr: 'مهندس ذكاء اصطناعي', aliases: ['artificial intelligence engineer', 'ai developer', 'ai software engineer', 'ai/ml engineer', 'ai ml engineer', 'ai/ml', 'ai ml', 'generative ai engineer', 'genai engineer', 'llm engineer', 'ai specialist', 'ai researcher', 'software engineer ai', 'ki engineer', 'ki entwickler'] },
+  { code: 'machine_learning_engineer', group: 'ai_ml', keyword: 'machine learning engineer', labelEn: 'Machine Learning Engineer', labelAr: 'مهندس تعلم آلي', aliases: ['ml engineer', 'machine learning', 'ml developer', 'mlops engineer', 'deep learning engineer', 'deep learning', 'computer vision engineer', 'computer vision', 'nlp engineer', 'nlp', 'natural language processing', 'ml researcher', 'applied scientist'] },
+  { code: 'data_scientist', group: 'ai_ml', keyword: 'data scientist', labelEn: 'Data Scientist', labelAr: 'عالم بيانات', aliases: ['data science', 'junior data scientist', 'senior data scientist', 'research scientist', 'quantitative analyst'] },
+
   // software_development
   { code: 'frontend_developer', group: 'software_development', keyword: 'frontend developer', labelEn: 'Frontend Developer', labelAr: 'مطور واجهات أمامية', aliases: ['frontend', 'front-end developer', 'front end developer', 'front-end engineer', 'web developer', 'ui developer', 'javascript developer', 'react developer', 'angular developer', 'vue developer'] },
   { code: 'backend_developer', group: 'software_development', keyword: 'backend developer', labelEn: 'Backend Developer', labelAr: 'مطور خلفي (باك اند)', aliases: ['backend', 'back-end developer', 'back end developer', 'back-end engineer', 'server-side developer', 'api developer', 'node developer', 'php developer', 'laravel developer', '.net developer', 'java developer', 'python developer'] },
@@ -102,7 +114,7 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
   { code: 'it_support', group: 'it_support', keyword: 'IT support technician', labelEn: 'IT Support', labelAr: 'دعم فني', aliases: ['technical support', 'help desk', 'helpdesk technician', 'desktop support', 'network technician', 'system administrator'] },
 
   // data_analytics
-  { code: 'data_analyst', group: 'data_analytics', keyword: 'data analyst', labelEn: 'Data Analyst', labelAr: 'محلل بيانات', aliases: ['business intelligence analyst', 'bi analyst', 'data scientist', 'reporting analyst'] },
+  { code: 'data_analyst', group: 'data_analytics', keyword: 'data analyst', labelEn: 'Data Analyst', labelAr: 'محلل بيانات', aliases: ['business intelligence analyst', 'bi analyst', 'reporting analyst'] },
 
   // design_creative
   { code: 'graphic_designer', group: 'design_creative', keyword: 'graphic designer', labelEn: 'Graphic Designer', labelAr: 'مصمم جرافيك', aliases: ['visual designer', 'brand designer', 'print designer'] },
@@ -222,7 +234,9 @@ export function normalize(text: string): string {
 
 /**
  * Deterministic, code-only matching — never an LLM call. A CV analysis's job title is normalized and
- * checked against every role's `labelEn`, `keyword`, and `aliases`; the first role with a hit wins
+ * checked against every role's `labelEn`, `keyword`, and `aliases` as WHOLE words (so "nlp" or
+ * "server" can't hit inside another word — "tailor" must not match "tailored"); the longest matching
+ * phrase wins, and among equally long ones the first role in the list
  * (array order above is the tie-break for a title that could plausibly match more than one). No
  * match returns `null` rather than guessing — the caller (see `JobsService`) logs that as an
  * unmatched title instead of forcing a pre-selection, per the "AI suggests, user confirms" rule.
@@ -236,13 +250,18 @@ export function resolveRoleFromCvTitle(title: string | null | undefined): RoleDe
     return null;
   }
 
+  // The most specific phrase wins ("gym instructor" over teacher's "instructor"); equal length → list order.
+  const padded = ` ${normalizedTitle} `;
+  let best: { role: RoleDefinition; length: number } | null = null;
   for (const role of ROLE_DEFINITIONS) {
-    const candidates = [role.labelEn, role.keyword, ...role.aliases];
-    if (candidates.some((candidate) => normalizedTitle.includes(normalize(candidate)))) {
-      return role;
+    for (const candidate of [role.labelEn, role.keyword, ...role.aliases]) {
+      const phrase = normalize(candidate);
+      if (padded.includes(` ${phrase} `) && phrase.length > (best?.length ?? 0)) {
+        best = { role, length: phrase.length };
+      }
     }
   }
-  return null;
+  return best?.role ?? null;
 }
 
 // Every role's keyword must be one of its own group's keywords — a typo here would silently break

@@ -12,7 +12,13 @@ The Expo mobile app lives in a separate repo (`sanad-client`). This repo is back
 
 Device registration, conversation (SSE), CV built section by section, CV upload and parsing, CV read/update, PDF export.
 
-**Not in scope yet** (see `TODO.md`): matching, applying, tailoring the CV per job, pgvector, n8n, LangGraph, auth, notifications. Job *ingestion* (a curated role list, Jooble as the first provider, budget-tracked caching) has started — see `modules/jobs/`.
+## Scope — phase 2
+
+Job ingestion (`modules/jobs/`: a curated role list, Jooble as the first provider, budget-tracked caching), job preferences (`modules/preferences/`), and two-stage matching (`modules/matching/`: pgvector search over filtered jobs, then the LLM explains the top candidates, cached per device). See API-CONTRACT.md §6.
+
+Real applying (`modules/applications/`, API-CONTRACT.md §7): per job, the CV is tailored (`ai/services/cv-tailor.service.ts` — reorder/reword only, fact-checked in code), then emailed to the company (`email` jobs, via `integrations/email`) or prepared for the user to finish on the listing (`external` jobs — never counted as applied). Async like CV analysis: a batch the app polls.
+
+**Not in scope yet** (see `TODO.md`): n8n, LangGraph, auth, notifications.
 
 ## Key decisions
 
@@ -71,6 +77,9 @@ src/
 │   │   ├── providers/          # one file per vendor
 │   │   └── llm.module.ts       # binds the interface to the configured provider
 │   ├── stt/                    # same shape: interface + providers
+│   ├── embeddings/             # same shape — text → vector(1024) for pgvector
+│   ├── jobs/                   # job providers (Jooble, fake)
+│   ├── email/                  # sending application emails (Resend, fake outbox)
 │   ├── storage/                # local now, S3-compatible later
 │   └── pdf/
 │
@@ -83,7 +92,11 @@ src/
     ├── device/
     ├── conversation/
     ├── cv/
-    └── upload/
+    ├── upload/
+    ├── jobs/                   # ingestion, job embeddings, the pgvector search
+    ├── preferences/            # job-search filters per device
+    ├── matching/               # GET /jobs/matches — vector stage + LLM stage + per-device cache
+    └── applications/           # POST/GET /applications — tailor, send or prepare, track status
 ```
 
 Every module follows the same internal shape:

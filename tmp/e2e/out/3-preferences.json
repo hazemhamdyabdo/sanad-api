@@ -1,0 +1,10 @@
+{
+  "country": "DE",
+  "city": null,
+  "workTypes": [
+    "on_site",
+    "hybrid",
+    "remote"
+  ],
+  "willingToRelocate": true
+}

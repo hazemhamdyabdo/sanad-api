@@ -85,3 +85,44 @@ export const DEFAULT_BUILD_SECTIONS: SectionId[] = ['basic', 'experience', 'educ
 
 /** The fixed action pair shown on every section_card, per the contract's example. */
 export const SECTION_CARD_ACTIONS = ['تأكيد', 'تعديل'] as const;
+
+/** Job matching (API-CONTRACT.md §6). `workType` is also a job-preferences filter. */
+export const WORK_TYPES = ['on_site', 'hybrid', 'remote'] as const;
+export type WorkType = (typeof WORK_TYPES)[number];
+
+export const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'shifts', 'field'] as const;
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
+
+/**
+ * How a matched job relates to the role resolved from the CV's title: the same curated role
+ * (`exact`), another role in the same adjacency group (`adjacent`), or no role could be resolved
+ * from the CV so the match rests on the vector search alone (`related`). Ranking puts `exact`
+ * before `adjacent` before `related`.
+ */
+export const ROLE_MATCHES = ['exact', 'adjacent', 'related'] as const;
+export type RoleMatch = (typeof ROLE_MATCHES)[number];
+
+export const APPLY_METHODS = ['email', 'external'] as const;
+export type ApplyMethod = (typeof APPLY_METHODS)[number];
+
+/** `searching`: the jobs for the CV's role in this country are still being fetched — the list may be partial, ask again shortly. */
+export const MATCHES_STATUSES = ['ready', 'searching'] as const;
+export type MatchesStatus = (typeof MATCHES_STATUSES)[number];
+
+/** A job-preferences country is an ISO 3166 alpha-2 code, or this for "anywhere" (remote). */
+export const WORLDWIDE = 'worldwide';
+
+/**
+ * Applications (API-CONTRACT.md §7). `sent`: we emailed the company. `prepared`: tailored CV ready,
+ * the user must finish on the listing site — never counted as applied. `opened`: the user opened
+ * that listing. `processing`: still tailoring/sending. `failed`: see the application's error.
+ */
+export const APPLICATION_STATUSES = ['processing', 'sent', 'prepared', 'opened', 'failed'] as const;
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
+/** Where a `processing` application is right now — for real progress in the app. */
+export const APPLICATION_STAGES = ['tailoring', 'sending'] as const;
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
+
+export const APPLICATION_BATCH_STATUSES = ['processing', 'done'] as const;
+export type ApplicationBatchStatus = (typeof APPLICATION_BATCH_STATUSES)[number];

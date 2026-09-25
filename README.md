@@ -71,3 +71,6 @@ pnpm run build        # nest build
 
 - [NestJS Documentation](https://docs.nestjs.com)
 - [TypeORM Documentation](https://typeorm.io)
+# Railway demo deployment
+
+Follow [DEPLOY-RAILWAY.md](DEPLOY-RAILWAY.md) for the ordered dashboard setup, complete environment variable list, pgvector database, persistent volumes, automatic migrations, and smoke checks. Start from `.env.railway.example`, not your local `.env`.

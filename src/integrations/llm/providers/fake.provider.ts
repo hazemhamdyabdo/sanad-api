@@ -18,6 +18,58 @@ const EXTRACTION_MARKER = 'استخرج البيانات';
 /** Marker unique to the CV-upload analysis prompt (see ai/prompts/cv-analysis.prompt.ts) — a separate, self-contained prompt with no `current_section` line. */
 const CV_ANALYSIS_MARKER = 'حلل ملف السيرة الذاتية';
 
+/** Marker unique to the job-match prompt (see ai/prompts/job-match.prompt.ts), and the header its user message puts before the jobs JSON. */
+const JOB_MATCH_MARKER = 'قيّم مدى مناسبة الوظايف';
+const JOB_MATCH_JOBS_HEADER = 'الوظايف:';
+
+/**
+ * Scores each job by how many of the candidate's title/skill words appear in it — crude, but
+ * deterministic and grounded in the actual input, so a fake run still ranks an accountant's CV
+ * above a cook's job. Replies in the prompt's exact shape, Egyptian Arabic included.
+ */
+function buildFakeJobMatchReply(userContent: string): Record<string, unknown> {
+  const [candidatePart, jobsPart = '[]'] = userContent.split(`\n${JOB_MATCH_JOBS_HEADER}\n`);
+  const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}+#]{3,}/gu) ?? []);
+  const candidateWords = words(candidatePart);
+  const jobs = JSON.parse(jobsPart) as Array<{ id: string; title: string; description: string }>;
+
+  return {
+    matches: jobs.map((job) => {
+      const shared = [...words(`${job.title} ${job.description}`)].filter((word) => candidateWords.has(word));
+      return {
+        jobId: job.id,
+        match: Math.min(95, 45 + shared.length * 8),
+        whyMatch: shared.length ? [`خبرتك في ${shared.slice(0, 2).join(' و')} (fake)`] : ['المجال قريب من خبرتك (fake)'],
+        gaps: shared.length < 3 ? ['مش واضح إن عندك كل المهارات المطلوبة (fake)'] : [],
+      };
+    }),
+  };
+}
+
+/** Marker unique to the CV-tailoring prompt (see ai/prompts/cv-tailor.prompt.ts), and the header before its job JSON. */
+const CV_TAILOR_MARKER = 'Tailor this CV to one job listing';
+const CV_TAILOR_JOB_HEADER = 'JOB LISTING:';
+
+/**
+ * A visible but fact-safe "tailoring": every entry's bullets in reverse order (same wording), and
+ * skills the listing mentions moved to the front — enough to see the tailored PDF differ offline.
+ */
+function buildFakeTailorReply(userContent: string): Record<string, unknown> {
+  const [cvPart, jobPart = '{}'] = userContent.split(`\n${CV_TAILOR_JOB_HEADER}\n`);
+  const cv = JSON.parse(cvPart.replace(/^CV:\n/, '')) as {
+    experience: Array<{ index: number; bullets: string[] }>;
+    projects: Array<{ index: number; bullets: string[] }>;
+    skills: string[];
+  };
+  const listing = jobPart.toLowerCase();
+  const mentioned = cv.skills.filter((skill) => listing.includes(skill.toLowerCase()));
+  return {
+    experience: cv.experience.map((entry) => ({ index: entry.index, bullets: [...entry.bullets].reverse() })),
+    projects: cv.projects.map((entry) => ({ index: entry.index, bullets: [...entry.bullets].reverse() })),
+    skillOrder: [...mentioned, ...cv.skills.filter((skill) => !mentioned.includes(skill))],
+  };
+}
+
 /** One fixed, schema-valid analysis — ignores the actual attached PDF (fake mode never reads document bytes), just enough shape for the upload pipeline to be exercised without a real key. */
 const FAKE_CV_ANALYSIS = {
   cv: {
@@ -99,6 +151,12 @@ export class FakeLlmProvider implements LlmProvider {
 
     if (system.includes(CV_ANALYSIS_MARKER)) {
       return FAKE_CV_ANALYSIS;
+    }
+    if (system.includes(CV_TAILOR_MARKER)) {
+      return buildFakeTailorReply(this.lastUserMessage(options));
+    }
+    if (system.includes(JOB_MATCH_MARKER)) {
+      return buildFakeJobMatchReply(this.lastUserMessage(options));
     }
     if (system.includes(EXTRACTION_MARKER)) {
       return this.buildExtractionReply(section, options);

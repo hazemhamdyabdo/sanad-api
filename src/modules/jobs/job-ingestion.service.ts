@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } f
 import { ConfigService } from '@nestjs/config';
 import { generateId } from '../../common/ids.js';
 import { JOB_PROVIDER, type JobProvider } from '../../integrations/jobs/job-provider.interface.js';
-import { JOOBLE_LOCATION_BY_COUNTRY } from './countries.js';
+import { JOOBLE_LOCATION_BY_COUNTRY, type TargetCountry } from './countries.js';
 import type { RoleIngestionCache } from './entities/role-ingestion-cache.entity.js';
 import { JobsService } from './jobs.service.js';
 import { RoleIngestionRepository } from './role-ingestion.repository.js';
@@ -15,7 +15,9 @@ import { getGroupById, ROLE_DEFINITIONS } from './roles.js';
  * (`JobsService.ensureRoleIngested` marking something `pending`) ever leads to an actual fetch. This
  * is the "schedule" that keeps a user's own request from ever directly triggering a Jooble call.
  */
-const SWEEP_INTERVAL_MS = 60 * 1000;
+// Short on purpose: a user whose field was never fetched is looking at an empty "searching" screen
+// until the next sweep, and an idle sweep is one DB query.
+const SWEEP_INTERVAL_MS = 5 * 1000;
 /** Small on purpose — naturally rate-limits a burst of many roles becoming pending at once. */
 const BATCH_SIZE = 5;
 
@@ -29,6 +31,8 @@ const BATCH_SIZE = 5;
 export class JobIngestionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(JobIngestionService.name);
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** A sweep can take longer than the interval (several provider calls + embedding) — never run two at once, or a pending group would be fetched (and paid for) twice. */
+  private sweeping = false;
 
   constructor(
     private readonly roleIngestionRepository: RoleIngestionRepository,
@@ -52,22 +56,47 @@ export class JobIngestionService implements OnModuleInit, OnModuleDestroy {
 
   /** Public so a seed/admin script can trigger one pass immediately instead of waiting for the interval — the exact same code path, not a shortcut. */
   async runSweepOnce(): Promise<void> {
-    const pending = await this.roleIngestionRepository.findPendingCache(BATCH_SIZE);
-    for (const cache of pending) {
-      if (!(await this.hasBudget())) {
-        cache.status = 'failed';
-        cache.lastError = 'JOOBLE_MAX_CALLS reached — budget exhausted';
-        await this.roleIngestionRepository.saveCache(cache);
-        this.logger.error(`Job search budget exhausted — group "${cache.group}" (${cache.country}) left unfetched. No further groups will be attempted this sweep.`);
-        return;
-      }
-      await this.ingestGroup(cache);
+    if (this.sweeping) {
+      return;
+    }
+    this.sweeping = true;
+    try {
+      await this.sweep();
+    } finally {
+      this.sweeping = false;
     }
   }
 
-  private async hasBudget(): Promise<boolean> {
+  private async sweep(): Promise<void> {
+    const pending = await this.roleIngestionRepository.findPendingCache(BATCH_SIZE);
+    for (const cache of pending) {
+      if (!this.provider.supportsCountry(cache.country)) {
+        cache.status = 'failed';
+        cache.lastError = `Job provider not configured for ${cache.country}`;
+        await this.roleIngestionRepository.saveCache(cache);
+        this.logger.warn(`Group "${cache.group}" (${cache.country}) skipped — the job provider has no key for ${cache.country}. No call was made.`);
+        continue;
+      }
+      if (!(await this.hasBudget(cache.country))) {
+        cache.status = 'failed';
+        cache.lastError = 'JOOBLE_MAX_CALLS reached — budget exhausted';
+        await this.roleIngestionRepository.saveCache(cache);
+        this.logger.error(`Job search budget exhausted for ${cache.country} — group "${cache.group}" left unfetched.`);
+        continue;
+      }
+      await this.ingestGroup(cache);
+    }
+    if (pending.length) {
+      // Freshly ingested jobs are only matchable once embedded — do it now rather than on the
+      // first user's request.
+      await this.jobsService.enrichPendingJobs();
+    }
+  }
+
+  /** Per country: Jooble's lifetime cap is per key, and each country has its own key. */
+  private async hasBudget(country: TargetCountry): Promise<boolean> {
     const providerName = this.configService.get<string>('jobs.provider', 'fake');
-    const used = await this.roleIngestionRepository.countCalls(providerName);
+    const used = await this.roleIngestionRepository.countCalls(providerName, JOOBLE_LOCATION_BY_COUNTRY[country]);
     const max = this.configService.get<number>('jobs.joobleMaxCalls', 450);
     return used < max;
   }
@@ -83,7 +112,7 @@ export class JobIngestionService implements OnModuleInit, OnModuleDestroy {
     for (const keyword of group.keywords) {
       // Re-checked per keyword, not just once per group — a group can have several keywords, and the
       // budget could run out partway through one.
-      if (!(await this.hasBudget())) {
+      if (!(await this.hasBudget(cache.country))) {
         allSucceeded = false;
         lastError = 'JOOBLE_MAX_CALLS reached mid-group';
         this.logger.error(`Job search budget exhausted mid-group "${cache.group}" (${cache.country}).`);
@@ -97,7 +126,7 @@ export class JobIngestionService implements OnModuleInit, OnModuleDestroy {
       }
 
       try {
-        const result = await this.provider.search({ keywords: keyword, location, resultsPerPage: 100 });
+        const result = await this.provider.search({ keywords: keyword, country: cache.country, location, resultsPerPage: 100 });
         await this.roleIngestionRepository.recordCall({
           id: generateId('jsc'),
           provider: providerName,

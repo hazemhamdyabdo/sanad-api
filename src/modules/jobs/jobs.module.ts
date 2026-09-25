@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EmbeddingModule } from '../../integrations/embeddings/embedding.module.js';
 import { JobProviderModule } from '../../integrations/jobs/job-provider.module.js';
 import { Job } from './entities/job.entity.js';
 import { JobSearchCall } from './entities/job-search-call.entity.js';
@@ -11,13 +12,12 @@ import { JobsService } from './jobs.service.js';
 import { RoleIngestionRepository } from './role-ingestion.repository.js';
 
 /**
- * No controller yet — nothing outside this module reads `Job` rows or triggers ingestion over HTTP.
- * `JobsService.ensureRoleIngested`/`matchRoleForCvTitle` are the module's public surface (see
- * `index.ts`), called for now only by the seed script; a CV-analysis/preferences-driven caller and a
- * jobs-read endpoint are later, separate work.
+ * No controller — job matching (`modules/matching`) is the HTTP surface for jobs, and reaches this
+ * module only through `JobsService` (see `index.ts`): demand-driven ingestion
+ * (`ensureRoleIngested`), embedding/enrichment, and the pgvector search itself.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Job, RoleIngestionCache, JobSearchCall, UnmatchedRoleTitle]), JobProviderModule],
+  imports: [TypeOrmModule.forFeature([Job, RoleIngestionCache, JobSearchCall, UnmatchedRoleTitle]), JobProviderModule, EmbeddingModule],
   providers: [JobsService, JobRepository, RoleIngestionRepository, JobIngestionService],
   // JobIngestionService is exported only so the seed script can trigger one sweep pass immediately
   // (see scripts/seed-job-roles.ts) — no controller or other module should call it directly;

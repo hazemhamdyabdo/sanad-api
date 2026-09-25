@@ -1,0 +1,13 @@
+import { AppError } from './app-error.js';
+export const INTERNAL_ERROR_BODY = {
+    code: 'INTERNAL',
+    message: 'حصل خطأ غير متوقع، جرب تاني',
+    retryable: true,
+};
+export function toErrorBody(exception) {
+    if (exception instanceof AppError) {
+        return { code: exception.code, message: exception.message, retryable: exception.retryable };
+    }
+    return INTERNAL_ERROR_BODY;
+}
+//# sourceMappingURL=to-error-body.js.map

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentDevice } from '../../common/decorators/current-device.decorator.js';
 import type { Device } from '../device/index.js';
@@ -21,6 +21,8 @@ export class CvController {
   }
 
   @Post('pdf')
+  // Contract says 200 — Nest's default for POST is 201, which this never meant (nothing is created).
+  @HttpCode(HttpStatus.OK)
   async exportPdf(@CurrentDevice() device: Device, @Res() response: Response): Promise<void> {
     const { file, filename } = await this.cvService.exportPdf(device.id);
     response.set({

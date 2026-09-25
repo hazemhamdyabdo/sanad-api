@@ -62,12 +62,16 @@ export const cvAnalysisSchema = z.object({
   /** Egyptian Arabic — shown straight to the user, same convention as every other user-facing string in this app. */
   strengths: z.array(text()),
   gaps: z.array(text()),
-  qualityIssues: z.array(
-    z.object({
-      type: z.enum(QUALITY_ISSUE_TYPES),
-      description: text(),
-    }),
-  ),
+  // An issue quoting an HTML entity ("&amp; في العنوان") is about the PDF's text extraction, not the
+  // CV — the user wrote "&". Shown to the user it's a false accusation, so it's dropped.
+  qualityIssues: z
+    .array(
+      z.object({
+        type: z.enum(QUALITY_ISSUE_TYPES),
+        description: text(),
+      }),
+    )
+    .transform((issues) => issues.filter((issue) => !/&(amp|lt|gt|quot|apos|nbsp|#\d+);/i.test(issue.description))),
   overallScore: z.number().int().min(0).max(100),
   scoreReason: text(),
 });

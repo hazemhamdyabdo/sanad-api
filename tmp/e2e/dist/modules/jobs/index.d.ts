@@ -1,0 +1,9 @@
+export { JobsModule } from './jobs.module.js';
+export { JobsService } from './jobs.service.js';
+export { TARGET_COUNTRIES, type TargetCountry } from './countries.js';
+export { ROLE_GROUPS, ROLE_DEFINITIONS, getRoleByCode, type RoleGroupId, type RoleDefinition } from './roles.js';
+export { buildEmbeddingText, groupLabel, type EmbeddingTextParts } from './embedding-text.js';
+export { toPlainText } from './job-facets.js';
+export type { SimilarJobsFilter, SimilarJobRow } from './job.repository.js';
+export type { Job } from './entities/job.entity.js';
+export type { RoleIngestionStatus } from './entities/role-ingestion-cache.entity.js';

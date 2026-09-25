@@ -293,3 +293,81 @@ no file attached
 ### GET /cv/uploads/:uploadId — poll for progress/result. Replace :uploadId with a real one from the POST above.
 GET {{baseUrl}}/cv/uploads/upl_replace_me
 X-Device-Id: {{deviceId}}
+
+### PUT /preferences — the job-matching filters (country, city, work types). Replaces the whole object.
+PUT {{baseUrl}}/preferences
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "country": "EG",
+  "city": "cairo",
+  "workTypes": ["on_site", "hybrid", "remote"],
+  "willingToRelocate": false
+}
+
+### PUT /preferences — a city with "worldwide" — INVALID_REQUEST
+PUT {{baseUrl}}/preferences
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "country": "worldwide",
+  "city": "cairo",
+  "workTypes": ["remote"]
+}
+
+### PUT /preferences — unknown work type / empty list — INVALID_REQUEST
+PUT {{baseUrl}}/preferences
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "country": "EG",
+  "city": null,
+  "workTypes": ["office"]
+}
+
+### GET /jobs/matches — needs a device with a CV. First call for a CV version runs the LLM (seconds); calling again is served from the per-device cache (no LLM call — check the api log for "from cache").
+GET {{baseUrl}}/jobs/matches
+X-Device-Id: {{deviceId}}
+
+### GET /jobs/matches for a registered device that has no CV yet (e.g. right after POST /devices) — NOT_FOUND
+GET {{baseUrl}}/jobs/matches
+X-Device-Id: {{deviceId}}
+
+### POST /applications — apply to selected jobs (ids from GET /jobs/matches). 202 at once; poll the batch below.
+# email jobs: tailored CV emailed to the company (EMAIL_PROVIDER=fake writes it to ./tmp/outbox instead).
+# external jobs: tailored CV prepared for download — status "prepared", never "sent".
+POST {{baseUrl}}/applications
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "jobIds": ["job_replace_me"]
+}
+
+### GET /applications/batches/:batchId — poll until status "done". Replace with a real batchId.
+GET {{baseUrl}}/applications/batches/apb_replace_me
+X-Device-Id: {{deviceId}}
+
+### GET /applications — every application of this device, newest first
+GET {{baseUrl}}/applications
+X-Device-Id: {{deviceId}}
+
+### POST /applications/:id/opened — the user opened an external listing (prepared → opened). An email application → INVALID_REQUEST.
+POST {{baseUrl}}/applications/app_replace_me/opened
+X-Device-Id: {{deviceId}}
+
+### GET /applications/:id/cv — the exact tailored CV used for that job, as PDF
+GET {{baseUrl}}/applications/app_replace_me/cv
+X-Device-Id: {{deviceId}}
+
+### POST /applications with an unknown job id — INVALID_REQUEST
+POST {{baseUrl}}/applications
+Content-Type: application/json
+X-Device-Id: {{deviceId}}
+
+{
+  "jobIds": ["job_does_not_exist"]
+}

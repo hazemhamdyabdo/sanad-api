@@ -1,13 +1,15 @@
-import { join } from 'node:path';
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LocalStorageProvider } from './providers/local.provider.js';
 import { STORAGE_PROVIDER } from './storage.interface.js';
 
-/** Gitignored, created on first write — see `.gitignore` and `LocalStorageProvider`. */
-const LOCAL_STORAGE_DIR = join(process.cwd(), 'uploads');
-
 @Module({
-  providers: [{ provide: STORAGE_PROVIDER, useValue: new LocalStorageProvider(LOCAL_STORAGE_DIR) }],
+  imports: [ConfigModule],
+  providers: [{
+    provide: STORAGE_PROVIDER,
+    inject: [ConfigService],
+    useFactory: (config: ConfigService) => new LocalStorageProvider(config.get<string>('UPLOAD_DIR', 'uploads')),
+  }],
   exports: [STORAGE_PROVIDER],
 })
 export class StorageModule {}

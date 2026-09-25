@@ -4,7 +4,7 @@
 
 **قاعدة:** الفرونت متبني على الشكل ده بـ mock data. الباك يلتزم بيه حرفيًا. أي تغيير يتناقش ويتعدل في النسختين مع بعض.
 
-**Phase 1** = الجهاز، والمحادثة، والـ CV. الوظايف والتقديم في نسخة جاية.
+**Phase 1** = الجهاز، والمحادثة، والـ CV. **Phase 2** = التفضيلات ومطابقة الوظايف (§6)، والتقديم (§7).
 
 ---
 
@@ -328,11 +328,178 @@ Response `202`:
 Response `200`: `application/pdf` (نص حقيقي مش صورة)
 Header: `Content-Disposition: attachment; filename="Ahmed-Hassan-CV.pdf"`
 
+الـ PDF بيتعمل على السيرفر بس — نفس المولّد اللي بيعمل الـ CV المتظبط لكل تقديم (§7)، فمفيش غير نسخة واحدة من شكل الـ CV.
+
+---
+
+## 6. التفضيلات ومطابقة الوظايف
+
+**ثوابت:**
+- `WorkType`: `on_site` · `hybrid` · `remote`
+- `EmploymentType`: `full_time` · `part_time` · `shifts` · `field`
+- `RoleMatch`: `exact` (نفس الدور اللي في الـ CV) · `adjacent` (دور قريب من نفس المجموعة) · `related` (الـ CV مش متطابق مع دور معروف، فالمطابقة بالتشابه بس)
+- `ApplyMethod`: `email` · `external`
+- `MatchesStatus`: `ready` · `searching`
+- الدول اللي بنجيب وظايفها: مصر `EG` · السعودية `SA` · الإمارات `AE` · ألمانيا `DE`.
+- المدينة كود بحروف صغيرة — مصر: `cairo` · `giza` · `alexandria` — السعودية: `riyadh` · `jeddah` · `dammam` — الإمارات: `dubai` · `abu_dhabi` · `sharjah` — ألمانيا: `berlin` · `munich` · `hamburg` · `frankfurt` · `cologne`. اسم المدينة بالعربي مسؤولية الفرونت.
+
+### `PUT /preferences`
+
+تفضيلات البحث عن وظايف للجهاز. بيستبدل التفضيلات كلها كل مرة.
+
+Request:
+```json
+{ "country": "EG", "city": "cairo", "workTypes": ["on_site", "hybrid"], "willingToRelocate": false }
+```
+- `country`: كود دولة من حرفين كبار (ISO 3166)، أو `"worldwide"` (أي مكان في العالم). دولة مش من الدول اللي بنجيب وظايفها (فوق) بتتحفظ عادي، بس `GET /jobs/matches` بيرجع `jobs: []` — متعرضهاش كاختيار.
+- `city`: كود مدينة، أو `null` = أي مكان في الدولة. لازم `null` مع `"worldwide"`.
+- `workTypes`: قيمة واحدة على الأقل من `WorkType`، من غير تكرار.
+- `willingToRelocate`: اختياري (default `false`) — بيتحفظ بس، مش فلتر.
+
+Response `200`: نفس الشكل.
+
+لو الجهاز عمره ما حفظ تفضيلات، المطابقة بتستخدم: دولة الجهاز (`region`)، أي مدينة، كل أنواع الشغل.
+
+### `GET /jobs/matches`
+
+الوظايف المناسبة للـ CV الحالي حسب التفضيلات المحفوظة.
+
+Response `200`:
+```json
+{
+  "status": "ready",
+  "preferences": { "country": "EG", "city": null, "workTypes": ["on_site", "hybrid", "remote"], "willingToRelocate": false },
+  "jobs": [
+    {
+      "id": "job_01H...",
+      "title": "Junior Accountant",
+      "company": "Nile Trading Co.",
+      "location": "Nasr City, Cairo",
+      "country": "EG",
+      "city": "cairo",
+      "employmentType": "full_time",
+      "workType": "on_site",
+      "postedAt": "2026-09-23T10:00:00Z",
+      "match": 94,
+      "roleMatch": "exact",
+      "whyMatch": ["خبرة Excel متقدمة", "بكالوريوس تجارة محاسبة"],
+      "gaps": ["مطلوب معرفة بسيستم ERP"],
+      "apply": { "method": "email", "url": "https://...", "email": "careers@nile.example.com" },
+      "application": null
+    }
+  ]
+}
+```
+
+- `preferences`: التفضيلات اللي اتفلتر بيها فعلًا (المحفوظة أو الـ default).
+- `status: "searching"`: لسه بنجمع وظايف مجال الـ CV في الدولة دي، أو لسه بنقيّم جزء منها — `jobs` ممكن تكون ناقصة أو فاضية، اسأل تاني بعد كام ثانية (النتايج بتوصل على دفعات، أول دفعة بتيجي في أول رد). `"ready"`: دي كل الوظايف المتاحة دلوقتي.
+- الترتيب: بالـ `match` من الأعلى. لو اتنين نفس الـ `match`، الـ `exact` قبل الـ `adjacent` قبل الـ `related`.
+- `match` من 0 لـ 100. الوظايف اللي أقل من 40 مش بترجع.
+- `whyMatch` (سبب واحد على الأقل) و`gaps` (ممكن `[]`) بالمصري، 3 بالكتير لكل واحدة.
+- `company` و`location` ممكن يبقوا `null`. `city`: كود أو `null` لو الوظيفة مش مربوطة بمدينة معروفة.
+- `apply.url` لينك الإعلان دايمًا. `apply.email` موجود بس لما `method: "email"`، وإلا `null`.
+- `application`: تقديم الجهاز على الوظيفة دي لو موجود — `{ "id": "app_...", "status": "sent" }` (`ApplicationStatus`، §7) — أو `null` لو عمره ما قدّم عليها. الوظيفة اللي عندها تقديم حالته غير `failed` مينفعش تتقدم تاني.
+- أول مرة لكل نسخة من الـ CV الـ AI بيقيّم الوظايف على دفعات: أول رد فيه أول دفعة مع `status: "searching"`، والباقي بيظهر في الردود اللي بعدها. بعد كده من الكاش، حتى لو التفضيلات اتغيرت. تعديل الـ CV بيعيد التقييم أوتوماتيك.
+- وصف الوظيفة ممكن يكون بأي لغة (مثلًا ألماني)، بس `whyMatch` و`gaps` دايمًا بالمصري.
+
+أخطاء: `404 NOT_FOUND` لو الجهاز معندوش CV · `400 INVALID_REQUEST` لو الـ CV مفيهوش مسمى وظيفي ولا خبرات ولا مهارات · `503 AI_UNAVAILABLE` (retryable) لو التقييم فشل.
+
+---
+
+## 7. التقديم
+
+التقديم حسب `apply.method` بتاع الوظيفة، بطريقتين صريحتين:
+- **`email` — بنقدّم فعلًا:** الـ CV بيتظبط على الوظيفة (ترتيب وصياغة الـ bullets والمهارات، من غير أي معلومة مش موجودة في الـ CV)، وبيتعمل PDF، وبيتبعت للشركة بإيميل من اليوزر (الرد بيروح لإيميل اليوزر نفسه). الحالة `sent`.
+- **`external` — بنجهّز واليوزر يكمّل:** نفس ظبط الـ CV، والـ PDF بيبقى متاح للتحميل، واليوزر يقدّم بنفسه من موقع الإعلان. الحالة `prepared` — **مش تقديم** — وبتبقى `opened` لما الفرونت يبلّغ إن اليوزر فتح الإعلان.
+
+**ثوابت:**
+- `ApplicationStatus`: `processing` (لسه بيتجهز) · `sent` · `prepared` · `opened` · `failed`
+- `ApplicationStage` (بس وهو `processing`): `tailoring` (بنظبط الـ CV) · `sending` (بنبعت الإيميل)
+- `ApplicationBatchStatus`: `processing` · `done`
+
+**شكل التقديم (`Application`):**
+```json
+{
+  "id": "app_01H...",
+  "batchId": "apb_01H...",
+  "jobId": "job_01H...",
+  "job": { "title": "Accountant", "company": "Nile Trading Co.", "location": "Giza, Egypt", "url": "https://...", "email": "careers@nile.example.com" },
+  "method": "email",
+  "status": "sent",
+  "stage": null,
+  "cvAvailable": true,
+  "cvTailored": true,
+  "error": null,
+  "createdAt": "2026-09-25T12:00:00Z",
+  "updatedAt": "2026-09-25T12:00:09Z",
+  "sentAt": "2026-09-25T12:00:09Z",
+  "preparedAt": null,
+  "openedAt": null,
+  "failedAt": null
+}
+```
+- `job`: نسخة من بيانات الوظيفة وقت التقديم. `job.email` = الإيميل اللي اتبعتله (بس لـ `email`)، وإلا `null`. `jobId` ممكن يبقى `null` لو الوظيفة اتمسحت.
+- `cvAvailable`: الـ CV المتظبط للوظيفة دي جاهز للتحميل (`GET /applications/:id/cv`).
+- `cvTailored`: `false` لو ظبط الـ CV مغيّرش حاجة واتبعت/اتجهز زي ما اليوزر كتبه.
+- `error`: `{ "message": "..." }` بالمصري لما `status: "failed"`، وإلا `null`.
+
+### `POST /applications`
+
+Request:
+```json
+{ "jobIds": ["job_01H...", "job_02H..."] }
+```
+من 1 لـ 20 id، من غير تكرار.
+
+Response `202` — بيرجع فورًا والشغل بيكمّل في الخلفية (زي تحليل الـ CV):
+```json
+{
+  "batchId": "apb_01H...",
+  "status": "processing",
+  "progress": { "total": 2, "completed": 0 },
+  "sent": [],
+  "prepared": [],
+  "failed": [],
+  "processing": [ { "...": "Application" } ],
+  "alreadyApplied": []
+}
+```
+- **مفيش تقديم مرتين على نفس الوظيفة:** وظيفة ليها تقديم قبل كده (`processing`/`sent`/`prepared`/`opened`) بترجع في `alreadyApplied` ومبتتعملش تاني. التقديم الـ `failed` بس هو اللي بيتعاد لو اتطلب تاني (بنفس الـ `id`).
+- `progress.total` = عدد اللي بتتعمل في الطلب ده (من غير `alreadyApplied`).
+
+أخطاء: `404 NOT_FOUND` لو الجهاز معندوش CV · `400 INVALID_REQUEST` لو فيه `jobId` مش موجود.
+
+### `GET /applications/batches/:batchId`
+
+الفرونت بيسأل عليه كل ثانية ونص لحد `status: "done"`. نفس شكل رد `POST /applications`.
+- `sent`: اتبعتت للشركة فعلًا.
+- `prepared`: جاهزة ومستنية اليوزر يكمّل من الموقع (فيها `prepared` و`opened`).
+- `failed`: فيها `error.message`.
+- `processing`: لسه شغالة — `stage` بيقول وصلت فين.
+
+### `GET /applications`
+
+كل تقديمات الجهاز، الأحدث الأول:
+```json
+{ "applications": [ { "...": "Application" } ] }
+```
+
+### `POST /applications/:id/opened`
+
+الفرونت بيبلّغ إن اليوزر فتح إعلان وظيفة `external`. Response `200`: الـ `Application` بحالة `opened` (لو اتبعت أكتر من مرة، أول `openedAt` بيفضل).
+أخطاء: `400 INVALID_REQUEST` لو التقديم `email`، أو لسه `processing`/`failed` · `404 NOT_FOUND`.
+
+### `GET /applications/:id/cv`
+
+Response `200`: `application/pdf` — الـ CV المتظبط اللي اتبعت أو اتجهز للوظيفة دي بالظبط (نص حقيقي، نفس شكل `POST /cv/pdf`).
+Header: `Content-Disposition: attachment; filename="Ahmed-Hassan-CV.pdf"`
+أخطاء: `404 NOT_FOUND` لو التقديم مش موجود أو الـ CV لسه بيتجهز (`cvAvailable: false`).
+
 ---
 
 ## متغيرش من غير اتفاق
 
 - أسامي الحقول وشكل الـ nesting.
-- قيم `SectionId` و`Level` و`MessageType` وأكواد الأخطاء.
+- قيم `SectionId` و`Level` و`MessageType` و`WorkType` و`EmploymentType` و`RoleMatch` و`ApplyMethod` و`MatchesStatus` و`ApplicationStatus` و`ApplicationStage` و`ApplicationBatchStatus` وأكواد المدن وأكواد الأخطاء.
 - أسامي أحداث الـ SSE وترتيبها.
 - شكل الخطأ الموحد.

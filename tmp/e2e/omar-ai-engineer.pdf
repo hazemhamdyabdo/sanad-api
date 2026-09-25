@@ -1,0 +1,76 @@
+%PDF-1.4
+%Sanad
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Length 3129 >>
+stream
+BT /F2 20 Tf 54.00 738.00 Td (OMAR KHALED MOSTAFA) Tj ET
+BT /F1 12 Tf 54.00 707.00 Td (AI Engineer | NLP & LLM Applications) Tj ET
+BT /F1 9 Tf 54.00 687.80 Td (0101 234 5678  |  omar.khaled.test@example.com  |  Nasr City, Cairo) Tj ET
+BT /F2 10.5 Tf 54.00 657.55 Td (SUMMARY) Tj ET
+0.6 G 0.5 w 54 654.05 m 558 654.05 l S 0 G
+BT /F1 10 Tf 54.00 637.38 Td (AI engineer with 4 years of experience building NLP and LLM-powered products, from data pipelines to) Tj ET
+BT /F1 10 Tf 54.00 623.88 Td (production APIs.) Tj ET
+BT /F2 10.5 Tf 54.00 600.27 Td (EXPERIENCE) Tj ET
+0.6 G 0.5 w 54 596.77 m 558 596.77 l S 0 G
+BT /F2 11 Tf 54.00 580.10 Td (AI Engineer - Instabug) Tj ET
+BT /F1 9 Tf 486.46 580.10 Td (03/2023 - Present) Tj ET
+BT /F1 10 Tf 54.00 564.25 Td (-  Built a retrieval-augmented generation \(RAG\) assistant over 40k support articles using LangChain and pgvector) Tj ET
+BT /F1 10 Tf 54.00 550.75 Td (-  Fine-tuned a BERT classifier in PyTorch to route bug reports, cutting manual triage time by 35%) Tj ET
+BT /F1 10 Tf 54.00 537.25 Td (-  Deployed model inference services with FastAPI and Docker on AWS) Tj ET
+BT /F1 10 Tf 54.00 523.75 Td (-  Set up offline evaluation for LLM answers with a labelled test set of 1,200 questions) Tj ET
+BT /F2 11 Tf 54.00 502.85 Td (Machine Learning Engineer - Vezeeta) Tj ET
+BT /F1 9 Tf 484.95 502.85 Td (07/2021 - 02/2023) Tj ET
+BT /F1 10 Tf 54.00 487.00 Td (-  Trained XGBoost models to predict appointment no-shows across 12 specialties) Tj ET
+BT /F1 10 Tf 54.00 473.50 Td (-  Built Arabic text preprocessing and named-entity recognition with spaCy for doctor reviews) Tj ET
+BT /F1 10 Tf 54.00 460.00 Td (-  Maintained Airflow pipelines feeding the feature store from PostgreSQL) Tj ET
+BT /F2 10.5 Tf 54.00 429.00 Td (PROJECTS) Tj ET
+0.6 G 0.5 w 54 425.50 m 558 425.50 l S 0 G
+BT /F2 11 Tf 54.00 408.82 Td (Arabic Speech-to-Text Demo) Tj ET
+BT /F1 10 Tf 54.00 392.97 Td (Open-source Whisper fine-tune on Egyptian Arabic) Tj ET
+BT /F1 10 Tf 54.00 379.47 Td (-  Fine-tuned Whisper small on 30 hours of Egyptian Arabic audio with Hugging Face Transformers) Tj ET
+BT /F2 10.5 Tf 54.00 348.47 Td (EDUCATION) Tj ET
+0.6 G 0.5 w 54 344.97 m 558 344.97 l S 0 G
+BT /F2 10 Tf 54.00 328.30 Td (B.Sc. Computer Engineering - Ain Shams University) Tj ET
+BT /F1 9 Tf 537.98 328.30 Td (2021) Tj ET
+BT /F2 10.5 Tf 54.00 302.70 Td (CERTIFICATES) Tj ET
+0.6 G 0.5 w 54 299.20 m 558 299.20 l S 0 G
+BT /F1 10 Tf 54.00 282.52 Td (AWS Certified Machine Learning - Specialty) Tj ET
+BT /F2 10.5 Tf 54.00 256.92 Td (SKILLS) Tj ET
+0.6 G 0.5 w 54 253.42 m 558 253.42 l S 0 G
+BT /F1 10 Tf 54.00 236.75 Td (Python \(Expert\), PyTorch \(Advanced\), LangChain \(Advanced\), Hugging Face Transformers \(Advanced\), FastAPI) Tj ET
+BT /F1 10 Tf 54.00 223.25 Td (\(Advanced\), Docker \(Intermediate\), AWS \(Intermediate\), SQL \(Advanced\), Airflow \(Intermediate\), scikit-learn) Tj ET
+BT /F1 10 Tf 54.00 209.75 Td (\(Advanced\)) Tj ET
+BT /F2 10.5 Tf 54.00 186.15 Td (LANGUAGES) Tj ET
+0.6 G 0.5 w 54 182.65 m 558 182.65 l S 0 G
+BT /F1 10 Tf 54.00 165.97 Td (Arabic \(Native\), English \(Fluent\), German \(Basic\)) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000016 00000 n 
+0000000065 00000 n 
+0000000122 00000 n 
+0000000192 00000 n 
+0000000267 00000 n 
+0000003448 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+3584
+%%EOF

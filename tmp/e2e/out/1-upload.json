@@ -1,0 +1,243 @@
+{
+  "uploadId": "upl_8aa51e9525fd46c18bd62eb83ea84e5c",
+  "status": "done",
+  "currentStage": "checking",
+  "analysis": {
+    "cv": {
+      "basic": {
+        "name": "Omar Khaled Mostafa",
+        "email": "omar.khaled.test@example.com",
+        "phone": "0101 234 5678",
+        "title": "AI Engineer | NLP & LLM Applications",
+        "location": "Nasr City, Cairo"
+      },
+      "skills": [
+        {
+          "name": "Python",
+          "level": "expert"
+        },
+        {
+          "name": "PyTorch",
+          "level": "advanced"
+        },
+        {
+          "name": "LangChain",
+          "level": "advanced"
+        },
+        {
+          "name": "Hugging Face Transformers",
+          "level": "advanced"
+        },
+        {
+          "name": "FastAPI",
+          "level": "advanced"
+        },
+        {
+          "name": "Docker",
+          "level": "intermediate"
+        },
+        {
+          "name": "AWS",
+          "level": "intermediate"
+        },
+        {
+          "name": "SQL",
+          "level": "advanced"
+        },
+        {
+          "name": "Airflow",
+          "level": "intermediate"
+        },
+        {
+          "name": "scikit-learn",
+          "level": "advanced"
+        }
+      ],
+      "projects": [
+        {
+          "title": "Arabic Speech-to-Text Demo",
+          "bullets": [
+            "Fine-tuned Whisper small on 30 hours of Egyptian Arabic audio with Hugging Face Transformers"
+          ],
+          "description": "Open-source Whisper fine-tune on Egyptian Arabic"
+        }
+      ],
+      "education": [
+        {
+          "year": "2021",
+          "degree": "B.Sc. Computer Engineering",
+          "school": "Ain Shams University"
+        }
+      ],
+      "languages": [
+        {
+          "name": "Arabic",
+          "level": "native"
+        },
+        {
+          "name": "English",
+          "level": "expert"
+        },
+        {
+          "name": "German",
+          "level": "beginner"
+        }
+      ],
+      "experience": [
+        {
+          "end": "Present",
+          "start": "03/2023",
+          "title": "AI Engineer",
+          "bullets": [
+            "Built a retrieval-augmented generation (RAG) assistant over 40k support articles using LangChain and pgvector",
+            "Fine-tuned a BERT classifier in PyTorch to route bug reports, cutting manual triage time by 35%",
+            "Deployed model inference services with FastAPI and Docker on AWS",
+            "Set up offline evaluation for LLM answers with a labelled test set of 1,200 questions"
+          ],
+          "company": "Instabug"
+        },
+        {
+          "end": "02/2023",
+          "start": "07/2021",
+          "title": "Machine Learning Engineer",
+          "bullets": [
+            "Trained XGBoost models to predict appointment no-shows across 12 specialties",
+            "Built Arabic text preprocessing and named-entity recognition with spaCy for doctor reviews",
+            "Maintained Airflow pipelines feeding the feature store from PostgreSQL"
+          ],
+          "company": "Vezeeta"
+        }
+      ],
+      "certificates": [
+        {
+          "date": null,
+          "name": "AWS Certified Machine Learning - Specialty"
+        }
+      ]
+    },
+    "sectionConfidence": {
+      "basic": "high",
+      "skills": "high",
+      "projects": "high",
+      "education": "high",
+      "languages": "high",
+      "experience": "high",
+      "certificates": "high"
+    },
+    "seniority": "mid",
+    "yearsOfExperience": 4,
+    "skills": {
+      "soft": [],
+      "tools": [
+        {
+          "name": "Docker",
+          "level": "intermediate",
+          "yearsUsed": 1
+        },
+        {
+          "name": "AWS",
+          "level": "intermediate",
+          "yearsUsed": 4
+        },
+        {
+          "name": "Airflow",
+          "level": "intermediate",
+          "yearsUsed": 2
+        },
+        {
+          "name": "pgvector",
+          "level": "intermediate",
+          "yearsUsed": 1
+        }
+      ],
+      "technical": [
+        {
+          "name": "Python",
+          "level": "expert",
+          "yearsUsed": 4
+        },
+        {
+          "name": "PyTorch",
+          "level": "advanced",
+          "yearsUsed": 4
+        },
+        {
+          "name": "LangChain",
+          "level": "advanced",
+          "yearsUsed": 1
+        },
+        {
+          "name": "Hugging Face Transformers",
+          "level": "advanced",
+          "yearsUsed": 4
+        },
+        {
+          "name": "FastAPI",
+          "level": "advanced",
+          "yearsUsed": 1
+        },
+        {
+          "name": "SQL",
+          "level": "advanced",
+          "yearsUsed": 4
+        },
+        {
+          "name": "scikit-learn",
+          "level": "advanced",
+          "yearsUsed": 4
+        },
+        {
+          "name": "XGBoost",
+          "level": "advanced",
+          "yearsUsed": 2
+        },
+        {
+          "name": "spaCy",
+          "level": "intermediate",
+          "yearsUsed": 2
+        },
+        {
+          "name": "BERT",
+          "level": "advanced",
+          "yearsUsed": 1
+        }
+      ]
+    },
+    "domains": [
+      "NLP",
+      "LLM",
+      "healthcare",
+      "SaaS"
+    ],
+    "strengths": [
+      "خبرة قوية في تطوير نماذج NLP وLLM وتطبيقها في منتجات حقيقية",
+      "قدرة على بناء أنابيب البيانات (data pipelines) من الصفر",
+      "خبرة في نشر النماذج كخدمات API باستخدام FastAPI وDocker",
+      "استخدام أدوات حديثة زي LangChain وHugging Face Transformers",
+      "تقييم نماذج LLM باستخدام مجموعات بيانات مختبرة"
+    ],
+    "gaps": [
+      "مفيش ذكر لأي خبرة في إدارة فرق أو قيادة مشاريع",
+      "مفيش تفاصيل عن أي مساهمة في أبحاث منشورة أو مؤتمرات",
+      "مفيش ذكر لأي خبرة في مجال MLOps أو نشر نماذج على نطاق واسع",
+      "مفيش تفاصيل عن أي مهارات غير تقنية (soft skills)"
+    ],
+    "qualityIssues": [
+      {
+        "type": "no_metrics",
+        "description": "مفيش أي مقاييس كمية (زي نسبة تحسين الأداء أو حجم البيانات) في قسم المشاريع"
+      },
+      {
+        "type": "ats_formatting",
+        "description": "استخدام &amp; في العنوان (NLP &amp; LLM) ممكن يسبب مشاكل في ATS"
+      },
+      {
+        "type": "inconsistent_dates",
+        "description": "تاريخ شهادة AWS مفقود"
+      }
+    ],
+    "overallScore": 85,
+    "scoreReason": "CV واضح ومنظم، فيه تفاصيل تقنية قوية وخبرة عملية واضحة، بس فيه بعض النقص في المقاييس الكمية وبعض مشاكل التنسيق البسيطة."
+  },
+  "error": null
+}

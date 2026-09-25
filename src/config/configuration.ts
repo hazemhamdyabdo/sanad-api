@@ -32,11 +32,21 @@ export const aiConfig = registerAs('ai', () => ({
   extractionModel: env.AI_EXTRACTION_MODEL,
   sttProvider: env.STT_PROVIDER,
   sttModel: env.STT_MODEL,
+  embeddingProvider: env.EMBEDDING_PROVIDER,
+  embeddingModel: env.EMBEDDING_MODEL,
+}));
+
+export const emailConfig = registerAs('email', () => ({
+  provider: env.EMAIL_PROVIDER,
+  resendApiKey: env.RESEND_API_KEY,
+  fromAddress: env.EMAIL_FROM_ADDRESS ?? 'applications@sanad.local',
+  fromName: env.EMAIL_FROM_NAME,
+  redirectTo: env.EMAIL_REDIRECT_TO ?? null,
 }));
 
 export const jobsConfig = registerAs('jobs', () => ({
   provider: env.JOB_PROVIDER,
-  joobleApiKey: env.JOOBLE_API_KEY,
+  joobleApiKeys: { EG: env.JOOBLE_API_KEY_EG, SA: env.JOOBLE_API_KEY_SA, AE: env.JOOBLE_API_KEY_AE, DE: env.JOOBLE_API_KEY_DE },
   joobleMaxCalls: env.JOOBLE_MAX_CALLS,
   cacheTtlDays: env.JOB_CACHE_TTL_DAYS,
 }));

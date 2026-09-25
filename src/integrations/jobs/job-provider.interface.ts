@@ -1,6 +1,8 @@
 export interface JobSearchQuery {
   keywords: string;
-  /** The provider's own expected location string (e.g. Jooble wants a country/city name) — translating our `TargetCountry` code into that is the provider's job, not the caller's. */
+  /** ISO country code of the market being searched (e.g. "EG") — some providers (Jooble) are split per country, with a separate endpoint and key for each. */
+  country: string;
+  /** The country's plain-English name (e.g. "Egypt"), for providers that take the location as free text. */
   location: string;
   page?: number;
   resultsPerPage?: number;
@@ -34,6 +36,8 @@ export interface JobSearchResult {
  * one-file change in providers/ + job-provider.module.ts. `modules/jobs` never knows this is Jooble.
  */
 export interface JobProvider {
+  /** Whether this provider is configured to search this country at all — checked before any call, so an unconfigured market never spends (or logs) one. */
+  supportsCountry(country: string): boolean;
   search(query: JobSearchQuery): Promise<JobSearchResult>;
 }
 

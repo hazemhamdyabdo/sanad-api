@@ -1,0 +1,224 @@
+{
+  "status": "ready",
+  "preferences": {
+    "country": "DE",
+    "city": null,
+    "workTypes": [
+      "on_site",
+      "hybrid",
+      "remote"
+    ],
+    "willingToRelocate": true
+  },
+  "jobs": [
+    {
+      "id": "job_d7dd14c996804b208d4d8e46c81045dd",
+      "title": "AI Engineer (m/w/d)",
+      "company": "Isar Robotics GmbH",
+      "location": "München, Deutschland",
+      "country": "DE",
+      "city": "munich",
+      "employmentType": "full_time",
+      "workType": "hybrid",
+      "postedAt": "2026-09-21T00:00:00.000Z",
+      "match": 90,
+      "roleMatch": "exact",
+      "whyMatch": [
+        "خبرة Python وLLMs وRAG",
+        "خبرة PyTorch",
+        "4 سنين خبرة"
+      ],
+      "gaps": [
+        "مطلوب لغة ألماني"
+      ],
+      "apply": {
+        "method": "email",
+        "url": "https://example.com/jobs/fake-ai-engineer-germany-2",
+        "email": "karriere@isar-robotics-gmbh.example.com"
+      },
+      "application": null
+    },
+    {
+      "id": "job_da52f3970a544e30acd82327067b3477",
+      "title": "Junior AI Engineer (m/f/d)",
+      "company": "Rheinwerk Digital AG",
+      "location": "Berlin, Deutschland",
+      "country": "DE",
+      "city": "berlin",
+      "employmentType": "full_time",
+      "workType": "on_site",
+      "postedAt": "2026-09-20T00:00:00.000Z",
+      "match": 75,
+      "roleMatch": "exact",
+      "whyMatch": [
+        "خبرة Python وLLMs وRAG",
+        "4 سنين خبرة في AI"
+      ],
+      "gaps": [],
+      "apply": {
+        "method": "external",
+        "url": "https://example.com/jobs/fake-ai-engineer-germany-1",
+        "email": null
+      },
+      "application": null
+    },
+    {
+      "id": "job_bf29a643398042b38731d2a19345e38c",
+      "title": "Senior AI Engineer (m/w/d)",
+      "company": "Elbe Health Tech GmbH",
+      "location": "Hamburg, Deutschland",
+      "country": "DE",
+      "city": "hamburg",
+      "employmentType": "full_time",
+      "workType": "remote",
+      "postedAt": "2026-09-22T00:00:00.000Z",
+      "match": 50,
+      "roleMatch": "exact",
+      "whyMatch": [
+        "خبرة Python وLLMs وRAG",
+        "خبرة PyTorch"
+      ],
+      "gaps": [
+        "مطلوب 5+ سنين خبرة",
+        "مطلوب لغة ألماني C1",
+        "مطلوب خبرة MLOps"
+      ],
+      "apply": {
+        "method": "external",
+        "url": "https://example.com/jobs/fake-ai-engineer-germany-3",
+        "email": null
+      },
+      "application": null
+    },
+    {
+      "id": "job_98f17786310149c2a5169e86f52a559a",
+      "title": "Machine Learning Engineer (m/w/d)",
+      "company": "Rheinwerk Digital AG",
+      "location": "München, Deutschland",
+      "country": "DE",
+      "city": "munich",
+      "employmentType": "full_time",
+      "workType": "hybrid",
+      "postedAt": "2026-09-21T00:00:00.000Z",
+      "match": 85,
+      "roleMatch": "adjacent",
+      "whyMatch": [
+        "خبرة Python وPyTorch",
+        "خبرة scikit-learn",
+        "4 سنين خبرة"
+      ],
+      "gaps": [
+        "مطلوب لغة ألماني"
+      ],
+      "apply": {
+        "method": "email",
+        "url": "https://example.com/jobs/fake-machine-learning-engineer-germany-2",
+        "email": "karriere@rheinwerk-digital-ag.example.com"
+      },
+      "application": null
+    },
+    {
+      "id": "job_7c7e630998274198905f506a59f404a7",
+      "title": "Junior Machine Learning Engineer (m/f/d)",
+      "company": "Nordlicht Analytics GmbH",
+      "location": "Berlin, Deutschland",
+      "country": "DE",
+      "city": "berlin",
+      "employmentType": "full_time",
+      "workType": "on_site",
+      "postedAt": "2026-09-20T00:00:00.000Z",
+      "match": 75,
+      "roleMatch": "adjacent",
+      "whyMatch": [
+        "خبرة 4 سنين في Python وPyTorch",
+        "مهارات NLP وLLM متقدمة",
+        "شهادة AWS Certified Machine Learning"
+      ],
+      "gaps": [],
+      "apply": {
+        "method": "external",
+        "url": "https://example.com/jobs/fake-machine-learning-engineer-germany-1",
+        "email": null
+      },
+      "application": null
+    },
+    {
+      "id": "job_da00f587cf7f48b69c38701b87f11278",
+      "title": "Data Scientist (m/w/d)",
+      "company": "Nordlicht Analytics GmbH",
+      "location": "München, Deutschland",
+      "country": "DE",
+      "city": "munich",
+      "employmentType": "full_time",
+      "workType": "hybrid",
+      "postedAt": "2026-09-21T00:00:00.000Z",
+      "match": 70,
+      "roleMatch": "adjacent",
+      "whyMatch": [
+        "خبرة Python وSQL",
+        "4 سنين خبرة"
+      ],
+      "gaps": [
+        "مطلوب لغة ألماني"
+      ],
+      "apply": {
+        "method": "email",
+        "url": "https://example.com/jobs/fake-data-scientist-germany-2",
+        "email": "karriere@nordlicht-analytics-gmbh.example.com"
+      },
+      "application": null
+    },
+    {
+      "id": "job_fad77f9bdac145088dd3d71a6647290a",
+      "title": "Junior Data Scientist (m/f/d)",
+      "company": "Spree Mobility GmbH",
+      "location": "Berlin, Deutschland",
+      "country": "DE",
+      "city": "berlin",
+      "employmentType": "full_time",
+      "workType": "on_site",
+      "postedAt": "2026-09-20T00:00:00.000Z",
+      "match": 60,
+      "roleMatch": "adjacent",
+      "whyMatch": [
+        "خبرة Python وSQL",
+        "4 سنين خبرة"
+      ],
+      "gaps": [],
+      "apply": {
+        "method": "external",
+        "url": "https://example.com/jobs/fake-data-scientist-germany-1",
+        "email": null
+      },
+      "application": null
+    },
+    {
+      "id": "job_d673fca9b351436bbd9776dfc0a4dfe2",
+      "title": "Senior Machine Learning Engineer (m/w/d)",
+      "company": "Isar Robotics GmbH",
+      "location": "Hamburg, Deutschland",
+      "country": "DE",
+      "city": "hamburg",
+      "employmentType": "full_time",
+      "workType": "remote",
+      "postedAt": "2026-09-22T00:00:00.000Z",
+      "match": 40,
+      "roleMatch": "adjacent",
+      "whyMatch": [
+        "خبرة Python وPyTorch",
+        "خبرة scikit-learn"
+      ],
+      "gaps": [
+        "مطلوب 5+ سنين خبرة",
+        "مطلوب لغة ألماني C1",
+        "مطلوب خبرة Kubernetes"
+      ],
+      "apply": {
+        "method": "external",
+        "url": "https://example.com/jobs/fake-machine-learning-engineer-germany-3",
+        "email": null
+      },
+      "application": null
+    }
+  ]
+}

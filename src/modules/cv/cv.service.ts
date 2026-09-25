@@ -36,7 +36,11 @@ export class CvService {
   ) {}
 
   async exportPdf(deviceId: string): Promise<{ file: Buffer; filename: string }> {
-    const cv = await this.getForDevice(deviceId);
+    return this.renderPdf(await this.getForDevice(deviceId));
+  }
+
+  /** Any CV in the contract's shape → PDF. The device's own CV and every application's tailored copy go through this one renderer. */
+  renderPdf(cv: CvResponseDto): { file: Buffer; filename: string } {
     const safeName = (cv.name ?? 'CV').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'CV';
     return { file: this.cvPdfRenderer.render(cv), filename: `${safeName}-CV.pdf` };
   }

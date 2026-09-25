@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { generateId } from '../../common/ids.js';
 import { JobSearchCall } from './entities/job-search-call.entity.js';
 import { RoleIngestionCache } from './entities/role-ingestion-cache.entity.js';
@@ -33,8 +33,13 @@ export class RoleIngestionRepository {
     return this.cacheRepo.find({ where: { status: 'pending' }, order: { updatedAt: 'ASC' }, take: limit });
   }
 
-  countCalls(provider: string): Promise<number> {
-    return this.callRepo.countBy({ provider });
+  countCalls(provider: string, location: string): Promise<number> {
+    return this.callRepo.countBy({ provider, location });
+  }
+
+  /** Whether this provider has ever fetched any of these keywords for this location — a group's freshness only counts for the provider that fetched it. */
+  hasSucceededCall(provider: string, keywords: string[], location: string): Promise<boolean> {
+    return this.callRepo.existsBy({ provider, keywords: In(keywords), location, succeeded: true });
   }
 
   recordCall(call: Omit<JobSearchCall, 'requestedAt'>): Promise<JobSearchCall> {

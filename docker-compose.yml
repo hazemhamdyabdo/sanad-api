@@ -8,7 +8,9 @@ name: sanad-api
 # is for the host-run dev workflow, not container-to-container networking.
 services:
   postgres:
-    image: postgres:17-alpine
+    # postgres:17-alpine + pgvector (job matching's embeddings) — see docker/postgres/Dockerfile.
+    build: ./docker/postgres
+    image: sanad-postgres:17-pgvector
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DATABASE_USER}

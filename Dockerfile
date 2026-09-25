@@ -5,14 +5,14 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod=false
 
 COPY . .
 RUN pnpm run build
 
 EXPOSE 3000
 
-# The dev override replaces this with hot reload + migrations. This is the
-# shape a future production image would keep: build once, run the compiled
-# output, no source mount.
+# Railway runs compiled migrations in its pre-deploy container (railway.json).
+# Keep dev dependencies: the shared CLI data source imports dotenv.
+ENV NODE_ENV=production
 CMD ["node", "dist/main.js"]
