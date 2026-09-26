@@ -86,6 +86,10 @@ export class Application {
   @Column({ type: 'timestamptz', nullable: true })
   openedAt!: Date | null;
 
+  /** When the user reported finishing the application on the listing site (`external` only). */
+  @Column({ type: 'timestamptz', nullable: true })
+  submittedAt!: Date | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   failedAt!: Date | null;
 }

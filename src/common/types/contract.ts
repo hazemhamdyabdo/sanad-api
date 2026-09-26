@@ -115,9 +115,10 @@ export const WORLDWIDE = 'worldwide';
 /**
  * Applications (API-CONTRACT.md §7). `sent`: we emailed the company. `prepared`: tailored CV ready,
  * the user must finish on the listing site — never counted as applied. `opened`: the user opened
- * that listing. `processing`: still tailoring/sending. `failed`: see the application's error.
+ * that listing. `submitted`: the user told us they finished applying on that site — counted as
+ * applied, like `sent`. `processing`: still tailoring/sending. `failed`: see the application's error.
  */
-export const APPLICATION_STATUSES = ['processing', 'sent', 'prepared', 'opened', 'failed'] as const;
+export const APPLICATION_STATUSES = ['processing', 'sent', 'prepared', 'opened', 'submitted', 'failed'] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 /** Where a `processing` application is right now — for real progress in the app. */

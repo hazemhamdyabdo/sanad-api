@@ -15,6 +15,13 @@ export interface LlmCompletionOptions {
   maxTokens?: number;
   /** Ask the provider to enforce valid JSON output at the API level, when it can (e.g. Mistral/OpenAI's `response_format: json_object`). A provider that can't enforce this just ignores it — the caller must still validate the result either way. */
   jsonMode?: boolean;
+  /**
+   * How long one `complete` call may take before it fails with a `TimeoutError` (see `common/timeout.ts`),
+   * so a hung model call ends as a visible failure instead of a background job stuck forever. Callers
+   * set it from what their call normally takes; the provider applies a conservative default otherwise.
+   * For `stream`, providers apply an idle timeout between chunks instead.
+   */
+  timeoutMs?: number;
 }
 
 /**

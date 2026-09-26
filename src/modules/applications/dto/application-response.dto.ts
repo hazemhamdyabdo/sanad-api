@@ -19,7 +19,28 @@ export interface ApplicationDto {
   sentAt: string | null;
   preparedAt: string | null;
   openedAt: string | null;
+  submittedAt: string | null;
   failedAt: string | null;
+}
+
+/** `GET /applications` — the list plus the counts the app's progress line needs, so it makes one call. */
+export interface ApplicationsListDto {
+  applications: ApplicationDto[];
+  summary: ApplicationsSummary;
+}
+
+/** Counts over every application of the device. `done` = `sent` + `submitted`; `pending` = `prepared` + `opened` (the user still has to finish). */
+export interface ApplicationsSummary {
+  total: number;
+  done: number;
+  pending: number;
+  processing: number;
+  failed: number;
+}
+
+export function summarize(applications: Array<{ status: ApplicationStatus }>): ApplicationsSummary {
+  const count = (...statuses: ApplicationStatus[]) => applications.filter((application) => statuses.includes(application.status)).length;
+  return { total: applications.length, done: count('sent', 'submitted'), pending: count('prepared', 'opened'), processing: count('processing'), failed: count('failed') };
 }
 
 /** `POST /applications` (202) and `GET /applications/batches/:batchId`. */
@@ -30,6 +51,8 @@ export interface ApplicationBatchDto {
   sent: ApplicationDto[];
   /** `prepared` and `opened` — waiting on the user to finish on the listing site. */
   prepared: ApplicationDto[];
+  /** `external` applications the user reported finishing on the listing site. */
+  submitted: ApplicationDto[];
   failed: ApplicationDto[];
   processing: ApplicationDto[];
   /** Requested jobs this device had already applied to — not processed again. */
@@ -68,6 +91,7 @@ export function toApplicationDto(application: Application): ApplicationDto {
     sentAt: iso(application.sentAt),
     preparedAt: iso(application.preparedAt),
     openedAt: iso(application.openedAt),
+    submittedAt: iso(application.submittedAt),
     failedAt: iso(application.failedAt),
   };
 }

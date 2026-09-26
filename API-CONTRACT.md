@@ -326,7 +326,7 @@ Response `202`:
 ### `POST /cv/pdf`
 
 Response `200`: `application/pdf` (نص حقيقي مش صورة)
-Header: `Content-Disposition: attachment; filename="Ahmed-Hassan-CV.pdf"`
+Header: `Content-Disposition: attachment; filename="Ahmed-Hassan-Senior-Accountant-Nile-Trading-Co.pdf"` — اسم الملف لكل وظيفة لوحدها: `Name-JobTitle-Company.pdf` (اسم اليوزر من الـ CV، المسمى، الشركة)، حروف إنجليزي وأرقام و`-` بس (أي حاجة تانية، بما فيها العربي، بتتشال — بعض الموبايلات بتبوّظ الأسامي غير الإنجليزي)، ومن غير `/`. الاسم لو مش موجود بيبقى `CV`، والمسمى لو كله عربي بيبقى `Job-<آخر 6 حروف من الـ id>`، والشركة لو مش معروفة بتتشال. عمره ما بيرجع `cv.pdf`. الفرونت يستخدم الاسم ده زي ما هو لما يحفظ أو يشير الملف.
 
 الـ PDF بيتعمل على السيرفر بس — نفس المولّد اللي بيعمل الـ CV المتظبط لكل تقديم (§7)، فمفيش غير نسخة واحدة من شكل الـ CV.
 
@@ -414,10 +414,10 @@ Response `200`:
 
 التقديم حسب `apply.method` بتاع الوظيفة، بطريقتين صريحتين:
 - **`email` — بنقدّم فعلًا:** الـ CV بيتظبط على الوظيفة (ترتيب وصياغة الـ bullets والمهارات، من غير أي معلومة مش موجودة في الـ CV)، وبيتعمل PDF، وبيتبعت للشركة بإيميل من اليوزر (الرد بيروح لإيميل اليوزر نفسه). الحالة `sent`.
-- **`external` — بنجهّز واليوزر يكمّل:** نفس ظبط الـ CV، والـ PDF بيبقى متاح للتحميل، واليوزر يقدّم بنفسه من موقع الإعلان. الحالة `prepared` — **مش تقديم** — وبتبقى `opened` لما الفرونت يبلّغ إن اليوزر فتح الإعلان.
+- **`external` — بنجهّز واليوزر يكمّل:** نفس ظبط الـ CV، والـ PDF بيبقى متاح للتحميل، واليوزر يقدّم بنفسه من موقع الإعلان. الحالة `prepared` — **مش تقديم** — وبتبقى `opened` لما الفرونت يبلّغ إن اليوزر فتح الإعلان، و`submitted` لما اليوزر يقول إنه خلّص التقديم هناك (`POST /applications/:id/submitted`). `submitted` هي اللي بتتحسب تقديم، زي `sent`.
 
 **ثوابت:**
-- `ApplicationStatus`: `processing` (لسه بيتجهز) · `sent` · `prepared` · `opened` · `failed`
+- `ApplicationStatus`: `processing` (لسه بيتجهز) · `sent` · `prepared` · `opened` · `submitted` · `failed`
 - `ApplicationStage` (بس وهو `processing`): `tailoring` (بنظبط الـ CV) · `sending` (بنبعت الإيميل)
 - `ApplicationBatchStatus`: `processing` · `done`
 
@@ -439,6 +439,7 @@ Response `200`:
   "sentAt": "2026-09-25T12:00:09Z",
   "preparedAt": null,
   "openedAt": null,
+  "submittedAt": null,
   "failedAt": null
 }
 ```
@@ -464,12 +465,13 @@ Response `202` — بيرجع فورًا والشغل بيكمّل في الخل
   "progress": { "total": 2, "completed": 0 },
   "sent": [],
   "prepared": [],
+  "submitted": [],
   "failed": [],
   "processing": [ { "...": "Application" } ],
   "alreadyApplied": []
 }
 ```
-- **مفيش تقديم مرتين على نفس الوظيفة:** وظيفة ليها تقديم قبل كده (`processing`/`sent`/`prepared`/`opened`) بترجع في `alreadyApplied` ومبتتعملش تاني. التقديم الـ `failed` بس هو اللي بيتعاد لو اتطلب تاني (بنفس الـ `id`).
+- **مفيش تقديم مرتين على نفس الوظيفة:** وظيفة ليها تقديم قبل كده (`processing`/`sent`/`prepared`/`opened`/`submitted`) بترجع في `alreadyApplied` ومبتتعملش تاني. التقديم الـ `failed` بس هو اللي بيتعاد لو اتطلب تاني (بنفس الـ `id`).
 - `progress.total` = عدد اللي بتتعمل في الطلب ده (من غير `alreadyApplied`).
 
 أخطاء: `404 NOT_FOUND` لو الجهاز معندوش CV · `400 INVALID_REQUEST` لو فيه `jobId` مش موجود.
@@ -479,19 +481,30 @@ Response `202` — بيرجع فورًا والشغل بيكمّل في الخل
 الفرونت بيسأل عليه كل ثانية ونص لحد `status: "done"`. نفس شكل رد `POST /applications`.
 - `sent`: اتبعتت للشركة فعلًا.
 - `prepared`: جاهزة ومستنية اليوزر يكمّل من الموقع (فيها `prepared` و`opened`).
+- `submitted`: اليوزر بلّغ إنه خلّص التقديم عليها من الموقع.
 - `failed`: فيها `error.message`.
 - `processing`: لسه شغالة — `stage` بيقول وصلت فين.
 
 ### `GET /applications`
 
-كل تقديمات الجهاز، الأحدث الأول:
+كل تقديمات الجهاز، الأحدث الأول، ومعاها الأرقام اللي شاشة التقديمات محتاجاها لسطر التقدّم ("قدّمت على ٣ من ١٢") من غير طلبات زيادة:
 ```json
-{ "applications": [ { "...": "Application" } ] }
+{
+  "applications": [ { "...": "Application" } ],
+  "summary": { "total": 12, "done": 3, "pending": 7, "processing": 1, "failed": 1 }
+}
 ```
+- `summary.total`: كل تقديمات الجهاز. `done` = `sent` + `submitted` (اللي اتقدّم عليها فعلًا). `pending` = `prepared` + `opened` (مستنية اليوزر يكمّل). `processing` و`failed` بنفس المعنى.
+- الترتيب في الرد بالأحدث؛ الفرونت هو اللي بيرتّب حسب اللي محتاج فعل (`pending` فوق، `done` تحت).
 
 ### `POST /applications/:id/opened`
 
 الفرونت بيبلّغ إن اليوزر فتح إعلان وظيفة `external`. Response `200`: الـ `Application` بحالة `opened` (لو اتبعت أكتر من مرة، أول `openedAt` بيفضل).
+أخطاء: `400 INVALID_REQUEST` لو التقديم `email`، أو لسه `processing`/`failed` · `404 NOT_FOUND`. لو التقديم `submitted` بيرجع زي ما هو من غير تغيير.
+
+### `POST /applications/:id/submitted`
+
+الفرونت بيبلّغ إن اليوزر خلّص التقديم بنفسه على موقع إعلان وظيفة `external` — الباك مالوش طريقة تانية يعرف. مختلفة عن `opened` (اللي معناها إنه فتح الإعلان بس). Response `200`: الـ `Application` بحالة `submitted` و`submittedAt` (لو اتبعت أكتر من مرة، أول `submittedAt` بيفضل). مسموحة من `prepared` أو `opened`.
 أخطاء: `400 INVALID_REQUEST` لو التقديم `email`، أو لسه `processing`/`failed` · `404 NOT_FOUND`.
 
 ### `GET /applications/:id/cv`

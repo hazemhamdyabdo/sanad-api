@@ -9,8 +9,9 @@ import { CvService, type CvResponseDto } from '../cv/index.js';
 import { JobsService, toPlainText } from '../jobs/index.js';
 import { contactForJobCountry } from './application-contact.js';
 import { buildApplicationEmail, headerSafe } from './application-email.js';
+import { applicationCvFilename } from './application-filename.js';
 import { ApplicationsRepository } from './applications.repository.js';
-import { toApplicationDto, type ApplicationBatchDto, type ApplicationDto } from './dto/application-response.dto.js';
+import { summarize, toApplicationDto, type ApplicationBatchDto, type ApplicationDto, type ApplicationsListDto } from './dto/application-response.dto.js';
 import { Application, type ApplicationErrorCode } from './entities/application.entity.js';
 
 /** Applications processed at once per batch — tailoring is an LLM call each, so a small pool, not all at once. */
@@ -62,7 +63,8 @@ function applyTailoring(cv: CvResponseDto, tailored: TailoredCvContent): CvRespo
  * - `email`: tailor the CV to the listing, render it to PDF, email it to the company with the
  *   candidate as Reply-To → `sent`.
  * - `external`: tailor the CV the same way and keep it downloadable → `prepared`. Never counted as
- *   applied; becomes `opened` only when the app reports the user opened the listing.
+ *   applied; becomes `opened` when the app reports the user opened the listing, and `submitted`
+ *   when the user says they finished applying there — only then does it count as applied.
  *
  * `POST /applications` returns at once; the work runs in the background and the app polls the
  * batch. Nothing is lost to a restart: stale `processing` rows are picked up again by a sweep, and
@@ -138,6 +140,7 @@ export class ApplicationsService implements OnModuleInit, OnModuleDestroy {
             sentAt: null,
             preparedAt: null,
             openedAt: null,
+            submittedAt: null,
             failedAt: null,
           } satisfies Partial<Application>),
         );
@@ -184,14 +187,16 @@ export class ApplicationsService implements OnModuleInit, OnModuleDestroy {
       progress: { total: applications.length, completed: applications.filter((application) => application.status !== 'processing').length },
       sent: byStatus('sent'),
       prepared: byStatus('prepared', 'opened'),
+      submitted: byStatus('submitted'),
       failed: byStatus('failed'),
       processing: byStatus('processing'),
       alreadyApplied,
     };
   }
 
-  async list(deviceId: string): Promise<{ applications: ApplicationDto[] }> {
-    return { applications: (await this.repository.findAllForDevice(deviceId)).map(toApplicationDto) };
+  async list(deviceId: string): Promise<ApplicationsListDto> {
+    const applications = (await this.repository.findAllForDevice(deviceId)).map(toApplicationDto);
+    return { applications, summary: summarize(applications) };
   }
 
   /** The app reports the user opened an external listing. Idempotent — the first open's time is kept. */
@@ -214,6 +219,31 @@ export class ApplicationsService implements OnModuleInit, OnModuleDestroy {
     return toApplicationDto(application);
   }
 
+  /**
+   * The user reports finishing an `external` application on the listing site — the only way we can
+   * know. Allowed from `prepared` as well as `opened`: the user may have reached the listing some
+   * other way. Idempotent — the first report's time is kept.
+   */
+  async markSubmitted(deviceId: string, id: string): Promise<ApplicationDto> {
+    const application = await this.repository.findById(id, deviceId);
+    if (!application) {
+      throw new AppError('NOT_FOUND', 'مش لاقيين التقديم ده', { retryable: false });
+    }
+    if (application.method !== 'external') {
+      throw new AppError('INVALID_REQUEST', 'التقديم ده اتبعت بالإيميل، مفيش حاجة تكمّلها', { retryable: false });
+    }
+    if (application.status === 'processing' || application.status === 'failed') {
+      throw new AppError('INVALID_REQUEST', 'الوظيفة دي لسه متجهزتش، استنى الـ CV يخلص الأول', { retryable: application.status === 'processing' });
+    }
+    if (application.status !== 'submitted') {
+      application.status = 'submitted';
+      application.submittedAt = new Date();
+      await this.repository.save(application);
+    }
+    return toApplicationDto(application);
+  }
+
+  /** The tailored CV as a PDF, named per job (`Name-JobTitle-Company.pdf`) so 20 downloads stay tellable apart. */
   async getCvPdf(deviceId: string, id: string): Promise<{ file: Buffer; filename: string }> {
     const application = await this.repository.findById(id, deviceId);
     if (!application) {
@@ -222,7 +252,7 @@ export class ApplicationsService implements OnModuleInit, OnModuleDestroy {
     if (!application.tailoredCv) {
       throw new AppError('NOT_FOUND', 'الـ CV بتاع الوظيفة دي لسه بيتجهز', { retryable: true });
     }
-    return this.cvService.renderPdf(application.tailoredCv);
+    return { file: this.cvService.renderPdf(application.tailoredCv).file, filename: applicationCvFilename(application) };
   }
 
   /** For job matching: which of these jobs the device already has an application for. */

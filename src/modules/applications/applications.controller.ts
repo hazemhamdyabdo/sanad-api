@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { CurrentDevice } from '../../common/decorators/current-device.decorator.js';
 import type { Device } from '../device/index.js';
 import { ApplicationsService } from './applications.service.js';
-import type { ApplicationBatchDto, ApplicationDto } from './dto/application-response.dto.js';
+import type { ApplicationBatchDto, ApplicationDto, ApplicationsListDto } from './dto/application-response.dto.js';
 import { CreateApplicationsDto } from './dto/create-applications.dto.js';
 
 @Controller('applications')
@@ -17,7 +17,7 @@ export class ApplicationsController {
   }
 
   @Get()
-  list(@CurrentDevice() device: Device): Promise<{ applications: ApplicationDto[] }> {
+  list(@CurrentDevice() device: Device): Promise<ApplicationsListDto> {
     return this.applicationsService.list(device.id);
   }
 
@@ -30,6 +30,12 @@ export class ApplicationsController {
   @HttpCode(HttpStatus.OK)
   markOpened(@CurrentDevice() device: Device, @Param('id') id: string): Promise<ApplicationDto> {
     return this.applicationsService.markOpened(device.id, id);
+  }
+
+  @Post(':id/submitted')
+  @HttpCode(HttpStatus.OK)
+  markSubmitted(@CurrentDevice() device: Device, @Param('id') id: string): Promise<ApplicationDto> {
+    return this.applicationsService.markSubmitted(device.id, id);
   }
 
   @Get(':id/cv')
