@@ -31,8 +31,14 @@ export interface JobMatchExplanation {
 }
 
 const ARABIC_LETTER = /[؀-ۿ]/;
-/** Egyptian Arabic, like every user-facing string — English skill names inside are fine ("خبرة Excel متقدمة"), an all-English line isn't. */
-const arabicLine = () => z.string().trim().min(2).max(120).refine((line) => ARABIC_LETTER.test(line), 'must be Egyptian Arabic');
+/**
+ * Egyptian Arabic, like every user-facing string — English skill names inside are fine ("خبرة Excel
+ * متقدمة"), an all-English line ("Python, SQL") isn't. Checked per line by `JobMatchService`, not by
+ * the schema: one English line among Arabic ones is dropped, while a job whose reasons are all
+ * English is re-asked — failing the whole item here threw away good jobs over one bad line.
+ */
+export const isArabicLine = (line: string): boolean => ARABIC_LETTER.test(line);
+const line = () => z.string().trim().min(2).max(120);
 
 /**
  * The model sometimes glues two list items into one string with the JSON punctuation leaked inside
@@ -45,7 +51,7 @@ const lines = () =>
       Array.isArray(value)
         ? value.flatMap((line) => (typeof line === 'string' ? line.split(/"\s*,\s*"/).map((part) => part.replace(/^[\s"]+|[\s"]+$/g, '')).filter(Boolean) : [line]))
         : value,
-    z.array(arabicLine()),
+    z.array(line()),
   );
 
 /** The model's reply envelope. Items are validated one by one (`jobMatchItemSchema`) so one bad item doesn't throw away the rest of the batch. */

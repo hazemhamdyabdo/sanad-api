@@ -12,7 +12,7 @@ export const JOB_MATCH_JOBS_HEADER = 'الوظايف:';
  * cached explanation's fingerprint (see `modules/matching`), so cached scores from an older version
  * get recomputed instead of mixed in.
  */
-export const JOB_MATCH_PROMPT_VERSION = 'v9';
+export const JOB_MATCH_PROMPT_VERSION = 'v10';
 
 /**
  * Stage two of matching: the vector search already picked these jobs as the closest to the CV;
@@ -37,6 +37,7 @@ export function buildJobMatchPrompt(candidate: MatchCandidate, jobs: MatchJob[])
       '- فرّق بين المطلوب والمفضّل: "مطلوب ..." بس للي الوصف بيطلبه صراحةً. اللي الوصف بيقول إنه ميزة إضافية بس ("von Vorteil"، "wünschenswert"، "nice to have"، "a plus"، "preferred") اكتبه "يفضّل ..." (مثلًا "يفضّل معرفة بالألماني")، ومتنزلش الـ "match" عشانه كتير.',
       '- لو الوظيفة طالبة لغة (زي الألماني) والمرشح مش كاتبها في "languages" أو مستواه فيها أقل من المطلوب، دي نقص يتكتب في "gaps".',
       '- متتكلمش عن المكان أو المرتب أو نوع الدوام — دي فلاتر اتطبقت قبل كده.',
+      '- اللغة: كل سطر في "whyMatch" و"gaps" جملة بالمصري بحروف عربي، تبدأ بكلمة عربي (زي "خبرة"، "بكالوريوس"، "مطلوب"، "يفضّل") أو برقم. أسماء المهارات والأدوات بالإنجليزي جوه الجملة عادي، لكن سطر كله إنجليزي مرفوض حتى لو أسماء مهارات بس: "Python, SQL" ✗ — "خبرة Python و SQL" ✓، "Bachelor of Computer Science" ✗ — "بكالوريوس Computer Science" ✓. بيانات المرشح والوظايف بالإنجليزي، بس ردك بالمصري.',
       '- كل "jobId" من القايمة لازم يظهر مرة واحدة بالظبط، بنفس الـ id المكتوب.',
       'رد بكائن JSON بس، من غير أي نص قبله أو بعده، بالشكل ده بالظبط:',
       '{"matches": [{"jobId": string, "match": number, "whyMatch": string[], "gaps": string[]}]}',
@@ -45,7 +46,7 @@ export function buildJobMatchPrompt(candidate: MatchCandidate, jobs: MatchJob[])
 
   const user: LlmMessage = {
     role: 'user',
-    content: ['المرشح:', JSON.stringify(candidate), '', JOB_MATCH_JOBS_HEADER, JSON.stringify(jobs)].join('\n'),
+    content: ['المرشح:', JSON.stringify(candidate), '', 'تذكير: كل سطر في "whyMatch" و"gaps" بالمصري بحروف عربي، وأسماء المهارات بالإنجليزي جواه.', '', JOB_MATCH_JOBS_HEADER, JSON.stringify(jobs)].join('\n'),
   };
 
   return [system, user];
