@@ -5,6 +5,8 @@ import { cvTailorOutputSchema, type TailorCvInput, type TailorJobInput, type Tai
 
 const MAX_ATTEMPTS = 2;
 const TAILOR_MAX_TOKENS = 3_000;
+/** Rewording one CV's bullets is a short call; past this the application goes out with the CV as written rather than waiting. */
+const TAILOR_CALL_TIMEOUT_MS = 45_000;
 
 function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
@@ -83,7 +85,7 @@ export class CvTailorService {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       let raw: string;
       try {
-        raw = await this.llm.complete({ messages: buildCvTailorPrompt(cv, job), temperature: 0, jsonMode: true, maxTokens: TAILOR_MAX_TOKENS });
+        raw = await this.llm.complete({ messages: buildCvTailorPrompt(cv, job), temperature: 0, jsonMode: true, maxTokens: TAILOR_MAX_TOKENS, timeoutMs: TAILOR_CALL_TIMEOUT_MS });
       } catch (error) {
         this.logger.warn(`CV tailoring call failed on attempt ${attempt + 1}: ${error instanceof Error ? error.message : String(error)}`);
         continue;

@@ -1,5 +1,11 @@
 import { Logger } from '@nestjs/common';
-import type { JobProvider, JobSearchQuery, JobSearchResult, ProviderJob } from '../job-provider.interface.js';
+import { fetchWithTimeout } from '../../../common/timeout.js';
+import type {
+  JobProvider,
+  JobSearchQuery,
+  JobSearchResult,
+  ProviderJob,
+} from '../job-provider.interface.js';
 
 /**
  * Jooble is split per country: each country site has its own API endpoint AND its own key — a key
@@ -12,6 +18,9 @@ const JOOBLE_HOST_BY_COUNTRY: Record<string, string> = {
   AE: 'ae.jooble.org',
   DE: 'de.jooble.org',
 };
+
+/** A search normally answers in a few seconds; a hung one would otherwise stall the ingestion sweep (and every user waiting on "searching"). */
+const REQUEST_TIMEOUT_MS = 30_000;
 
 interface JoobleJob {
   id: number | string;
@@ -51,21 +60,28 @@ export class JoobleProvider implements JobProvider {
     const host = JOOBLE_HOST_BY_COUNTRY[query.country];
     const apiKey = this.apiKeys[query.country];
     if (!host || !apiKey) {
-      throw new Error(`No Jooble API key configured for country "${query.country}".`);
+      throw new Error(
+        `No Jooble API key configured for country "${query.country}".`,
+      );
     }
-    const response = await fetch(`https://${host}/api/${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        keywords: query.keywords,
-        // The country site already scopes results to its country — no location means the whole country.
-        location: '',
-        page: query.page ?? 1,
-        // Up to 100 per Jooble's own docs — maximizing this is how a 500-call lifetime budget
-        // stretches to cover meaningfully many jobs instead of 500 calls of ~20 each.
-        ResultOnPage: query.resultsPerPage ?? 100,
-      }),
-    });
+    const response = await fetchWithTimeout(
+      `https://${host}/api/${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keywords: query.keywords,
+          // The country site already scopes results to its country — no location means the whole country.
+          location: '',
+          page: query.page ?? 1,
+          // Up to 100 per Jooble's own docs — maximizing this is how a 500-call lifetime budget
+          // stretches to cover meaningfully many jobs instead of 500 calls of ~20 each.
+          ResultOnPage: query.resultsPerPage ?? 100,
+        }),
+      },
+      REQUEST_TIMEOUT_MS,
+      `Jooble search (${host})`,
+    );
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
@@ -73,7 +89,9 @@ export class JoobleProvider implements JobProvider {
     }
 
     const data = (await response.json()) as JoobleResponse;
-    this.logger.log(`keywords="${query.keywords}" host=${host} -> ${data.jobs?.length ?? 0}/${data.totalCount ?? '?'} jobs`);
+    this.logger.log(
+      `keywords="${query.keywords}" host=${host} -> ${data.jobs?.length ?? 0}/${data.totalCount ?? '?'} jobs`,
+    );
 
     return {
       totalCount: data.totalCount ?? 0,

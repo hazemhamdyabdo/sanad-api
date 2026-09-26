@@ -1,9 +1,12 @@
 import { Logger } from '@nestjs/common';
+import { fetchWithTimeout } from '../../../common/timeout.js';
 import { EMBEDDING_DIMENSIONS, type EmbeddingProvider } from '../embedding.interface.js';
 
 const MISTRAL_EMBEDDINGS_URL = 'https://api.mistral.ai/v1/embeddings';
 /** Keeps each request well under the endpoint's per-request token ceiling — job texts are a few hundred tokens each. */
 const BATCH_SIZE = 32;
+/** One batch of 32 short texts normally embeds in a second or two — anything past this is a hung connection, not a slow one. */
+const REQUEST_TIMEOUT_MS = 30_000;
 
 interface MistralEmbeddingResponse {
   data: Array<{ index: number; embedding: number[] }>;
@@ -28,11 +31,16 @@ export class MistralEmbeddingProvider implements EmbeddingProvider {
   }
 
   private async embedBatch(texts: string[]): Promise<number[][]> {
-    const response = await fetch(MISTRAL_EMBEDDINGS_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: this.model, input: texts }),
-    });
+    const response = await fetchWithTimeout(
+      MISTRAL_EMBEDDINGS_URL,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: this.model, input: texts }),
+      },
+      REQUEST_TIMEOUT_MS,
+      `Mistral embeddings (${this.model})`,
+    );
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');

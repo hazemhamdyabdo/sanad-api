@@ -1,10 +1,13 @@
 import { Logger } from '@nestjs/common';
+import { fetchWithTimeout } from '../../../common/timeout.js';
 import type { SttProvider, SttResult, SttTranscribeOptions } from '../stt.interface.js';
 
 const MISTRAL_TRANSCRIPTIONS_URL = 'https://api.mistral.ai/v1/audio/transcriptions';
 
 /** Mistral caps context biasing at 100 terms. */
 const MAX_CONTEXT_BIAS_TERMS = 100;
+/** Uploading a voice note of a minute or two and transcribing it — well under this; the app itself gives up on the request before long anyway. */
+const REQUEST_TIMEOUT_MS = 60_000;
 
 interface MistralTranscriptionResponse {
   text: string;
@@ -37,11 +40,12 @@ export class MistralSttProvider implements SttProvider {
       form.append('context_bias', term.trim().replace(/\s+/g, '_'));
     }
 
-    const response = await fetch(MISTRAL_TRANSCRIPTIONS_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.apiKey}` },
-      body: form,
-    });
+    const response = await fetchWithTimeout(
+      MISTRAL_TRANSCRIPTIONS_URL,
+      { method: 'POST', headers: { Authorization: `Bearer ${this.apiKey}` }, body: form },
+      REQUEST_TIMEOUT_MS,
+      `Mistral transcription (${this.model})`,
+    );
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');

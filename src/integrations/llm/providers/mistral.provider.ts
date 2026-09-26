@@ -1,7 +1,15 @@
 import { Logger } from '@nestjs/common';
+import { fetchWithTimeout, TimeoutError } from '../../../common/timeout.js';
 import type { LlmCompletionOptions, LlmMessage, LlmProvider } from '../llm.interface.js';
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
+/**
+ * For a `complete` call whose caller didn't say how long it normally takes. Generous on purpose —
+ * the point is "never forever", not "fast": callers with a known profile pass their own `timeoutMs`.
+ */
+const DEFAULT_COMPLETION_TIMEOUT_MS = 90_000;
+/** A stream that goes quiet this long — no headers, no next chunk — is dead, not thinking. */
+const STREAM_IDLE_TIMEOUT_MS = 60_000;
 
 type MistralContentPart = { type: 'text'; text: string } | { type: 'document_url'; document_url: string };
 type MistralMessage = { role: LlmMessage['role']; content: string | MistralContentPart[] };
@@ -45,18 +53,24 @@ export class MistralProvider implements LlmProvider {
   ) {}
 
   async complete(options: LlmCompletionOptions): Promise<string> {
-    const response = await fetch(MISTRAL_API_URL, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({
-        model: this.model,
-        messages: toMistralMessages(options.messages),
-        temperature: options.temperature,
-        max_tokens: options.maxTokens,
-        stream: false,
-        response_format: options.jsonMode ? { type: 'json_object' } : undefined,
-      }),
-    });
+    const timeoutMs = options.timeoutMs ?? DEFAULT_COMPLETION_TIMEOUT_MS;
+    const response = await fetchWithTimeout(
+      MISTRAL_API_URL,
+      {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify({
+          model: this.model,
+          messages: toMistralMessages(options.messages),
+          temperature: options.temperature,
+          max_tokens: options.maxTokens,
+          stream: false,
+          response_format: options.jsonMode ? { type: 'json_object' } : undefined,
+        }),
+      },
+      timeoutMs,
+      `Mistral chat completion (${this.model})`,
+    );
 
     if (!response.ok) {
       throw await this.toError(response);
@@ -70,20 +84,41 @@ export class MistralProvider implements LlmProvider {
   }
 
   async *stream(options: LlmCompletionOptions): AsyncIterable<string> {
-    const response = await fetch(MISTRAL_API_URL, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({
-        model: this.model,
-        messages: toMistralMessages(options.messages),
-        temperature: options.temperature,
-        max_tokens: options.maxTokens,
-        stream: true,
-        response_format: options.jsonMode ? { type: 'json_object' } : undefined,
-      }),
-    });
+    // An idle timeout rather than a total one: a long reply that keeps flowing is fine, a reply
+    // that stops flowing is not. The timer is re-armed on every chunk and aborts the request when
+    // it fires, which surfaces here as a rejected `read()`.
+    const controller = new AbortController();
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const armIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => controller.abort(), STREAM_IDLE_TIMEOUT_MS);
+    };
+    const asTimeout = (error: unknown): unknown =>
+      controller.signal.aborted ? new TimeoutError(`Mistral chat stream (${this.model}) idle`, STREAM_IDLE_TIMEOUT_MS) : error;
+
+    armIdleTimer();
+    let response: Response;
+    try {
+      response = await fetch(MISTRAL_API_URL, {
+        method: 'POST',
+        headers: this.headers(),
+        body: JSON.stringify({
+          model: this.model,
+          messages: toMistralMessages(options.messages),
+          temperature: options.temperature,
+          max_tokens: options.maxTokens,
+          stream: true,
+          response_format: options.jsonMode ? { type: 'json_object' } : undefined,
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      clearTimeout(idleTimer);
+      throw asTimeout(error);
+    }
 
     if (!response.ok || !response.body) {
+      clearTimeout(idleTimer);
       throw await this.toError(response);
     }
 
@@ -91,32 +126,44 @@ export class MistralProvider implements LlmProvider {
     const decoder = new TextDecoder();
     let buffer = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        return;
-      }
-      buffer += decoder.decode(value, { stream: true });
-
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) {
-          continue;
+    try {
+      while (true) {
+        armIdleTimer();
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch (error) {
+          throw asTimeout(error);
         }
-        const payload = trimmed.slice('data:'.length).trim();
-        if (payload === '[DONE]') {
+        const { done, value } = chunk;
+        if (done) {
           return;
         }
+        buffer += decoder.decode(value, { stream: true });
 
-        const chunk = JSON.parse(payload) as MistralStreamChunk;
-        const text = chunk.choices[0]?.delta.content;
-        if (text) {
-          yield text;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) {
+            continue;
+          }
+          const payload = trimmed.slice('data:'.length).trim();
+          if (payload === '[DONE]') {
+            return;
+          }
+
+          const chunkData = JSON.parse(payload) as MistralStreamChunk;
+          const text = chunkData.choices[0]?.delta.content;
+          if (text) {
+            yield text;
+          }
         }
       }
+    } finally {
+      clearTimeout(idleTimer);
+      reader.releaseLock();
     }
   }
 

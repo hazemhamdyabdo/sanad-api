@@ -13,6 +13,8 @@ const MAX_CONCURRENT_BATCHES = 4;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 1_500;
 const MATCH_MAX_TOKENS = 3_000;
+/** One batch of 7 explains in ~12s when things are healthy; a call still open at this point is a hung one, and the retry handles it. */
+const MATCH_CALL_TIMEOUT_MS = 40_000;
 /**
  * First attempt is deterministic. A retry at temperature 0 with the same prompt returns the same
  * rejected reply token for token (seen in the logs: identical usage on attempts 2 and 3), so retries
@@ -157,7 +159,7 @@ export class JobMatchService {
 
       let raw: string;
       try {
-        raw = await this.llm.complete({ messages, temperature: previous ? RETRY_TEMPERATURE : 0, jsonMode: true, maxTokens: MATCH_MAX_TOKENS });
+        raw = await this.llm.complete({ messages, temperature: previous ? RETRY_TEMPERATURE : 0, jsonMode: true, maxTokens: MATCH_MAX_TOKENS, timeoutMs: MATCH_CALL_TIMEOUT_MS });
       } catch (error) {
         // Rate limits and transient network errors land here — worth another try after the delay.
         this.logger.warn(`Job match call failed on attempt ${attempt + 1}: ${error instanceof Error ? error.message : String(error)}`);

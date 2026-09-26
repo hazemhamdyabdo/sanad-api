@@ -178,6 +178,13 @@ export class ApplicationsService implements OnModuleInit, OnModuleDestroy {
     }
     const order = (ids: string[]) => (applications: Application[]) => ids.map((id) => applications.find((application) => application.id === id)).filter((application) => application !== undefined);
     const applications = order(batch.applicationIds)(await this.repository.findByIds(batch.applicationIds)).map(toApplicationDto);
+    if (batch.status !== 'done' && applications.every((application) => application.status !== 'processing')) {
+      // Every application reached a final state but the batch row never did (a crash between the last
+      // application's save and the batch's) — the app must see "done", never an in-progress batch with nothing left to do.
+      batch.status = 'done';
+      batch.completedAt = new Date();
+      await this.repository.saveBatch(batch);
+    }
     const alreadyApplied = order(batch.alreadyAppliedIds)(await this.repository.findByIds(batch.alreadyAppliedIds)).map(toApplicationDto);
     const byStatus = (...statuses: ApplicationStatus[]) => applications.filter((application) => statuses.includes(application.status));
 

@@ -8,6 +8,12 @@ const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص ق
 /** One retry is enough here: unlike the live conversation, there's no user to keep talking to — a repeated failure just fails the upload outright rather than looping. */
 const MAX_ATTEMPTS = 3;
 const ANALYSIS_MAX_TOKENS = 8_000;
+/**
+ * Reading a whole PDF and writing a full analysis is the longest single model call in the app —
+ * typically well under a minute, so this is a "hung, not slow" line. A timed-out attempt is not
+ * retried (it would only hang again): the error propagates and the upload is marked failed.
+ */
+const ANALYSIS_CALL_TIMEOUT_MS = 120_000;
 
 export type CvAnalysisOutcome = { success: true; data: CvAnalysisResult } | { success: false };
 
@@ -72,7 +78,7 @@ export class CvAnalysisService {
     let messages = initialMessages;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      const raw = await this.llm.complete({ messages, temperature: 0, jsonMode: true, maxTokens: ANALYSIS_MAX_TOKENS });
+      const raw = await this.llm.complete({ messages, temperature: 0, jsonMode: true, maxTokens: ANALYSIS_MAX_TOKENS, timeoutMs: ANALYSIS_CALL_TIMEOUT_MS });
 
       let parsed: unknown;
       let retryReason = 'The response was not valid JSON.';
