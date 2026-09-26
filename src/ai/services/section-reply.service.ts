@@ -1,8 +1,20 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { SectionId } from '../../common/types/contract.js';
-import { EXTRACTION_LLM_PROVIDER, LLM_PROVIDER, type LlmMessage, type LlmProvider } from '../../integrations/llm/llm.interface.js';
-import { buildConversationPrompt, buildExtractionPrompt } from '../prompts/section-reply.prompt.js';
-import { CARD_SCHEMA_BY_SECTION, conversationReplySchema, type SectionReply } from '../schemas/section-reply.schema.js';
+import {
+  EXTRACTION_LLM_PROVIDER,
+  LLM_PROVIDER,
+  type LlmMessage,
+  type LlmProvider,
+} from '../../integrations/llm/llm.interface.js';
+import {
+  buildConversationPrompt,
+  buildExtractionPrompt,
+} from '../prompts/section-reply.prompt.js';
+import {
+  CARD_SCHEMA_BY_SECTION,
+  conversationReplySchema,
+  type SectionReply,
+} from '../schemas/section-reply.schema.js';
 
 /**
  * A technical failure talking to the model is never something the user caused, and they must
@@ -19,7 +31,10 @@ const SOFT_FALLBACK_MESSAGE = 'معلش، ممكن تقولهالي تاني؟';
  * asking for exactly what the card needs, rotated so the user never gets the same line twice in a row.
  */
 const CLARIFY_QUESTIONS_BY_SECTION: Record<SectionId, string[]> = {
-  basic: ['معلش، عايز أكتبها صح — ممكن تقولي اسمك بالكامل تاني؟', 'تمام، وإيه المسمى الوظيفي اللي تحب يتكتب في الـ CV؟'],
+  basic: [
+    'معلش، عايز أكتبها صح — ممكن تقولي اسمك بالكامل تاني؟',
+    'تمام، وإيه المسمى الوظيفي اللي تحب يتكتب في الـ CV؟',
+  ],
   experience: [
     'معلش، عايز أكتبها صح — إيه المسمى الوظيفي بالظبط، وكنت شغال في أنهي شركة أو مكان؟',
     'تمام، وكنت بتعمل إيه هناك بالظبط؟ قولي حاجتين أو تلاتة من شغلك اليومي.',
@@ -56,13 +71,18 @@ const SECTIONS_ALLOWED_EMPTY: SectionId[] = ['certificates'];
 
 function clarifyingQuestion(section: SectionId, history: LlmMessage[]): string {
   const questions = CLARIFY_QUESTIONS_BY_SECTION[section];
-  const alreadyAsked = history.filter((entry) => entry.role === 'assistant' && questions.includes(entry.content)).length;
+  const alreadyAsked = history.filter(
+    (entry) => entry.role === 'assistant' && questions.includes(entry.content),
+  ).length;
   return questions[alreadyAsked % questions.length] as string;
 }
 const JSON_ONLY_REMINDER = 'رد بكائن JSON بس، من غير أي نص قبله أو بعده.';
 
 /** Reminders sent on each retry of the conversation call, escalating from a pure formatting nudge to also asking for different phrasing. */
-const CONVERSATION_RETRY_REMINDERS = [JSON_ONLY_REMINDER, 'حاول تاني بصياغة سؤال مختلفة، ورد بكائن JSON بس زي ما اتطلب من غير أي نص تاني.'];
+const CONVERSATION_RETRY_REMINDERS = [
+  JSON_ONLY_REMINDER,
+  'حاول تاني بصياغة سؤال مختلفة، ورد بكائن JSON بس زي ما اتطلب من غير أي نص تاني.',
+];
 
 const EMPTY_ARRAY_REMINDER =
   'راجع المحادثة تاني بالكامل، من أول رسالة للآخر — هل ذكر المستخدم أي عنصر فعلي في أي رسالة من رسايله في أي وقت؟ لو أيوه، لازم يتحط في الـ array حتى لو آخر رسالة بتاعته بتقول "مفيش" أو "خلاص". رجع array فاضي [] بس لو مفيش أي عنصر اتقال فعلاً من الأول للآخر.';
@@ -74,12 +94,16 @@ const EMPTY_ARRAY_REMINDER =
  * every single time. Matches only short messages: a longer, substantive answer that happens to
  * contain "مفيش" (e.g. describing a job) is real content, not a closing utterance.
  */
-const CLOSING_INTENT = /خلاص|مفيش|بس كد[اه]|كد[اه] بس|تمام كد[اه]|كد[اه] تمام|كفاية|خلصنا|خلصت|^(لا|لأ|لاء)[،,]?\s*(شكر|تمام|مفيش|خلاص)/;
+const CLOSING_INTENT =
+  /خلاص|مفيش|بس كد[اه]|كد[اه] بس|تمام كد[اه]|كد[اه] تمام|كفاية|خلصنا|خلصت|^(لا|لأ|لاء)[،,]?\s*(شكر|تمام|مفيش|خلاص)/;
 const MAX_MESSAGE_LENGTH_FOR_CLOSING_INTENT = 40;
 
 function hasClosingIntent(userText: string): boolean {
   const trimmed = userText.trim();
-  return trimmed.length <= MAX_MESSAGE_LENGTH_FOR_CLOSING_INTENT && CLOSING_INTENT.test(trimmed);
+  return (
+    trimmed.length <= MAX_MESSAGE_LENGTH_FOR_CLOSING_INTENT &&
+    CLOSING_INTENT.test(trimmed)
+  );
 }
 
 const NEUTRAL_CLOSING_MESSAGE = 'تمام، خلصنا القسم ده.';
@@ -128,38 +152,63 @@ interface RequiredFieldRule {
   mention: RegExp;
 }
 
-const REQUIRED_FIELDS_BY_SECTION: Partial<Record<SectionId, RequiredFieldRule[]>> = {
+const REQUIRED_FIELDS_BY_SECTION: Partial<
+  Record<SectionId, RequiredFieldRule[]>
+> = {
   basic: [
-    { fields: ['title'], ask: 'طب إيه المسمى الوظيفي بتاعك، أو الوظيفة اللي بتدور عليها؟', mention: /المسمى الوظيفي/i },
-    { fields: ['phone', 'email'], ask: 'ممكن آخد رقم موبايلك أو إيميلك؟', mention: /رقم موبايلك أو إيميلك/i },
+    {
+      fields: ['title'],
+      ask: 'طب إيه المسمى الوظيفي بتاعك، أو الوظيفة اللي بتدور عليها؟',
+      mention: /المسمى الوظيفي/i,
+    },
+    {
+      fields: ['phone', 'email'],
+      ask: 'ممكن آخد رقم موبايلك أو إيميلك؟',
+      mention: /رقم موبايلك أو إيميلك/i,
+    },
   ],
 };
 
 for (const rules of Object.values(REQUIRED_FIELDS_BY_SECTION)) {
   for (const rule of rules ?? []) {
     if (!rule.mention.test(rule.ask)) {
-      throw new Error(`RequiredFieldRule misconfigured: mention pattern ${rule.mention} doesn't match its own ask text "${rule.ask}".`);
+      throw new Error(
+        `RequiredFieldRule misconfigured: mention pattern ${rule.mention} doesn't match its own ask text "${rule.ask}".`,
+      );
     }
   }
 }
 
-function hasEntries(card: Record<string, unknown> | unknown[] | null | undefined): card is Record<string, unknown> | unknown[] {
+function hasEntries(
+  card: Record<string, unknown> | unknown[] | null | undefined,
+): card is Record<string, unknown> | unknown[] {
   if (!card) return false;
   return Array.isArray(card) ? card.length > 0 : Object.keys(card).length > 0;
 }
 
-function countAssistantMentions(history: LlmMessage[], pattern: RegExp): number {
-  return history.filter((entry) => entry.role === 'assistant' && pattern.test(entry.content)).length;
+function countAssistantMentions(
+  history: LlmMessage[],
+  pattern: RegExp,
+): number {
+  return history.filter(
+    (entry) => entry.role === 'assistant' && pattern.test(entry.content),
+  ).length;
 }
 
 /** The first unmet rule (if any) whose missing field hasn't already been asked about once. */
-function findUnmetRequiredField(rules: RequiredFieldRule[], card: Record<string, unknown>, history: LlmMessage[]): RequiredFieldRule | null {
+function findUnmetRequiredField(
+  rules: RequiredFieldRule[],
+  card: Record<string, unknown>,
+  history: LlmMessage[],
+): RequiredFieldRule | null {
   for (const rule of rules) {
     const satisfied = rule.fields.some((field) => !!card[field]);
     if (satisfied) {
       continue;
     }
-    if (countAssistantMentions(history, rule.mention) < REQUIRED_FIELD_ASK_LIMIT) {
+    if (
+      countAssistantMentions(history, rule.mention) < REQUIRED_FIELD_ASK_LIMIT
+    ) {
       return rule;
     }
   }
@@ -178,8 +227,13 @@ function sanitizeForcedCloseMessage(message: string): string {
   if (!/[؟?]/.test(message)) {
     return message;
   }
-  const sentences = message.split(/(?<=[.!])\s*/).filter((sentence) => sentence.trim().length > 0);
-  const withoutQuestion = sentences.filter((sentence) => !/[؟?]/.test(sentence)).join(' ').trim();
+  const sentences = message
+    .split(/(?<=[.!])\s*/)
+    .filter((sentence) => sentence.trim().length > 0);
+  const withoutQuestion = sentences
+    .filter((sentence) => !/[؟?]/.test(sentence))
+    .join(' ')
+    .trim();
   return withoutQuestion.length > 5 ? withoutQuestion : NEUTRAL_CLOSING_MESSAGE;
 }
 
@@ -216,7 +270,14 @@ function dropAllNullEntries(parsed: unknown): unknown {
   if (!Array.isArray(parsed)) {
     return parsed;
   }
-  return parsed.filter((entry) => !(entry && typeof entry === 'object' && Object.values(entry).every((value) => value === null)));
+  return parsed.filter(
+    (entry) =>
+      !(
+        entry &&
+        typeof entry === 'object' &&
+        Object.values(entry).every((value) => value === null)
+      ),
+  );
 }
 
 const ARABIC_CHAR = '[\\u0600-\\u06FF]';
@@ -232,7 +293,9 @@ const LATIN_THEN_ARABIC = new RegExp(`(${LATIN_CHAR})(${ARABIC_CHAR})`, 'g');
  * card data.
  */
 function insertArabicLatinBoundarySpace(text: string): string {
-  return text.replace(ARABIC_THEN_LATIN, '$1 $2').replace(LATIN_THEN_ARABIC, '$1 $2');
+  return text
+    .replace(ARABIC_THEN_LATIN, '$1 $2')
+    .replace(LATIN_THEN_ARABIC, '$1 $2');
 }
 
 type RetryOutcome<T> = { success: true; data: T } | { success: false };
@@ -246,7 +309,10 @@ type CallKind = typeof CONVERSATION_CALL | typeof EXTRACTION_CALL;
  * `failed` = it couldn't produce a valid card at all.
  * Outside SECTIONS_ALLOWED_EMPTY both mean the same thing: ask the user to clarify.
  */
-type ExtractionOutcome = { kind: 'card'; card: Record<string, unknown> | unknown[] } | { kind: 'empty' } | { kind: 'failed' };
+type ExtractionOutcome =
+  | { kind: 'card'; card: Record<string, unknown> | unknown[] }
+  | { kind: 'empty' }
+  | { kind: 'failed' };
 
 /**
  * Two LLM calls per turn instead of one. A single prompt that both holds a
@@ -269,25 +335,47 @@ export class SectionReplyService {
 
   constructor(
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
-    @Inject(EXTRACTION_LLM_PROVIDER) private readonly extractionLlm: LlmProvider,
+    @Inject(EXTRACTION_LLM_PROVIDER)
+    private readonly extractionLlm: LlmProvider,
   ) {}
 
-  async generate(section: SectionId, history: LlmMessage[], userText: string, previousBestCard?: Record<string, unknown> | unknown[] | null): Promise<SectionReply> {
+  async generate(
+    section: SectionId,
+    history: LlmMessage[],
+    userText: string,
+    previousBestCard?: Record<string, unknown> | unknown[] | null,
+  ): Promise<SectionReply> {
     const convMessages = buildConversationPrompt(section, history, userText);
-    const convOutcome = await this.completeWithRetries(convMessages, extractJsonObject, (value) => conversationReplySchema.safeParse(value), CONVERSATION_RETRY_REMINDERS);
+    const convOutcome = await this.completeWithRetries(
+      convMessages,
+      extractJsonObject,
+      (value) => conversationReplySchema.safeParse(value),
+      CONVERSATION_RETRY_REMINDERS,
+    );
 
     if (!convOutcome.success) {
-      this.logger.warn(`Conversation call failed after all retries (section: ${section}) — falling back to a soft in-character message.`);
-      return { message: SOFT_FALLBACK_MESSAGE, section, sectionDone: false, hasNoExperience: false, card: null };
+      this.logger.warn(
+        `Conversation call failed after all retries (section: ${section}) — falling back to a soft in-character message.`,
+      );
+      return {
+        message: SOFT_FALLBACK_MESSAGE,
+        section,
+        sectionDone: false,
+        hasNoExperience: false,
+        card: null,
+      };
     }
 
     const message = insertArabicLatinBoundarySpace(convOutcome.data.message);
-    const hasNoExperience = section === 'experience' && convOutcome.data.hasNoExperience;
+    const hasNoExperience =
+      section === 'experience' && convOutcome.data.hasNoExperience;
     let sectionDone = convOutcome.data.sectionDone;
     let finalMessage = message;
 
     if (!sectionDone && !hasNoExperience && soundsLikeClosing(message)) {
-      this.logger.warn(`Model wrote a closing message but sectionDone: false (section: ${section}) — overriding to true.`);
+      this.logger.warn(
+        `Model wrote a closing message but sectionDone: false (section: ${section}) — overriding to true.`,
+      );
       sectionDone = true;
     }
 
@@ -297,7 +385,9 @@ export class SectionReplyService {
 
     if (closingIntentFired) {
       if (!sectionDone) {
-        this.logger.warn(`User signaled closing intent ("${userText}") — overriding sectionDone to true (section: ${section}).`);
+        this.logger.warn(
+          `User signaled closing intent ("${userText}") — overriding sectionDone to true (section: ${section}).`,
+        );
       }
       sectionDone = true;
     }
@@ -308,41 +398,69 @@ export class SectionReplyService {
         // dropping the trailing question is what keeps a card from appearing next to an
         // unanswerable one.
         finalMessage = sanitizeForcedCloseMessage(finalMessage);
-        this.logger.warn(`Forced close still had a trailing question (section: ${section}) — message sanitized.`);
+        this.logger.warn(
+          `Forced close still had a trailing question (section: ${section}) — message sanitized.`,
+        );
       } else {
         // A message that's still asking something can't also mean "this section is done" — except
         // the hasNoExperience pivot, where the question legitimately belongs to the section being
         // switched to.
-        this.logger.warn(`Conversation call said sectionDone: true while still asking a question (section: ${section}) — overriding to false.`);
+        this.logger.warn(
+          `Conversation call said sectionDone: true while still asking a question (section: ${section}) — overriding to false.`,
+        );
         sectionDone = false;
       }
     }
 
     let card: Record<string, unknown> | unknown[] | null = null;
     if (sectionDone && !hasNoExperience) {
-      const fullHistory: LlmMessage[] = [...history, { role: 'user', content: userText }];
+      const fullHistory: LlmMessage[] = [
+        ...history,
+        { role: 'user', content: userText },
+      ];
       // A closing-only message ("خلاص"/"مفيش") carries no data of its own, and the extraction call
       // has shown a tendency to latch onto it and report the whole section as empty. The message
       // still has to stay in the transcript (dropping it left the array ending on an assistant turn,
       // which the chat API rejects) — instead, the extraction prompt is told explicitly to disregard
       // it as a data source when deciding what's in the section.
-      const closingMessageOnly = hasClosingIntent(userText) && history.length > 0;
-      const extraction = await this.extractCard(section, fullHistory, closingMessageOnly, previousBestCard);
+      const closingMessageOnly =
+        hasClosingIntent(userText) && history.length > 0;
+      const extraction = await this.extractCard(
+        section,
+        fullHistory,
+        closingMessageOnly,
+        previousBestCard,
+      );
       card = extraction.kind === 'card' ? extraction.card : null;
 
-      if (card && previousBestCard && !Array.isArray(card) && !Array.isArray(previousBestCard)) {
-        const suppliedValues = Object.fromEntries(Object.entries(card).filter(([, value]) => value !== null && value !== undefined && value !== ''));
+      if (
+        card &&
+        previousBestCard &&
+        !Array.isArray(card) &&
+        !Array.isArray(previousBestCard)
+      ) {
+        const suppliedValues = Object.fromEntries(
+          Object.entries(card).filter(
+            ([, value]) =>
+              value !== null && value !== undefined && value !== '',
+          ),
+        );
         card = { ...previousBestCard, ...suppliedValues };
       }
 
-      if (extraction.kind === 'empty' && SECTIONS_ALLOWED_EMPTY.includes(section)) {
+      if (
+        extraction.kind === 'empty' &&
+        SECTIONS_ALLOWED_EMPTY.includes(section)
+      ) {
         // The user has none (e.g. no certificates) — shown as an empty card for them to confirm.
         card = [];
       }
 
       if (card === null && hasEntries(previousBestCard)) {
         // An earlier turn in this section already produced a real card — show that rather than lose it.
-        this.logger.warn(`Extraction failed but a prior card exists (section: ${section}) — reusing it.`);
+        this.logger.warn(
+          `Extraction failed but a prior card exists (section: ${section}) — reusing it.`,
+        );
         card = previousBestCard;
       }
 
@@ -350,20 +468,36 @@ export class SectionReplyService {
         // Never advance past a section we couldn't structure, and never leave it empty: stay here and
         // ask for exactly what the card needs. The full transcript is persisted, so extraction runs
         // over everything again on the next reply — the user only adds, never repeats their whole story.
-        this.logger.warn(`No card for section ${section} (${extraction.kind}) — asking the user to clarify.`);
+        this.logger.warn(
+          `No card for section ${section} (${extraction.kind}) — asking the user to clarify.`,
+        );
         finalMessage = clarifyingQuestion(section, history);
         sectionDone = false;
-      } else if (Array.isArray(card) && Array.isArray(previousBestCard) && card.length < previousBestCard.length) {
+      } else if (
+        Array.isArray(card) &&
+        Array.isArray(previousBestCard) &&
+        card.length < previousBestCard.length
+      ) {
         // Losing a user's data is worse than showing a slightly stale card: if this turn's extraction
         // came back with fewer entries than the best one already produced for this section, that's
         // very likely the model dropping entries, not the user retracting them — keep the larger one.
-        this.logger.warn(`New extraction (${card.length} entries) is smaller than a prior one (${previousBestCard.length}) for section ${section} — keeping the larger one.`);
+        this.logger.warn(
+          `New extraction (${card.length} entries) is smaller than a prior one (${previousBestCard.length}) for section ${section} — keeping the larger one.`,
+        );
         card = previousBestCard;
       } else if (!Array.isArray(card)) {
         const rules = REQUIRED_FIELDS_BY_SECTION[section];
-        const unmet = rules ? findUnmetRequiredField(rules, card as Record<string, unknown>, history) : null;
+        const unmet = rules
+          ? findUnmetRequiredField(
+              rules,
+              card as Record<string, unknown>,
+              history,
+            )
+          : null;
         if (unmet) {
-          this.logger.warn(`${section} would close missing a required field (one of: ${unmet.fields.join('/')}) — forcing one more turn.`);
+          this.logger.warn(
+            `${section} would close missing a required field (one of: ${unmet.fields.join('/')}) — forcing one more turn.`,
+          );
           sectionDone = false;
           card = null;
           finalMessage = unmet.ask;
@@ -371,7 +505,13 @@ export class SectionReplyService {
       }
     }
 
-    return { message: finalMessage, section, sectionDone, hasNoExperience, card };
+    return {
+      message: finalMessage,
+      section,
+      sectionDone,
+      hasNoExperience,
+      card,
+    };
   }
 
   /**
@@ -385,15 +525,39 @@ export class SectionReplyService {
     closingMessageOnly = false,
     existingCard?: Record<string, unknown> | unknown[] | null,
   ): Promise<ExtractionOutcome> {
-    const extractionMessages = buildExtractionPrompt(section, sectionHistory, closingMessageOnly, existingCard);
-    const parse = (value: unknown): { success: true; data: Record<string, unknown> | unknown[] } | { success: false; error: { issues: unknown } } => {
-      const result = CARD_SCHEMA_BY_SECTION[section].safeParse(dropAllNullEntries(value));
-      return result.success ? { success: true, data: result.data as Record<string, unknown> | unknown[] } : { success: false, error: { issues: result.error.issues } };
+    const extractionMessages = buildExtractionPrompt(
+      section,
+      sectionHistory,
+      closingMessageOnly,
+      existingCard,
+    );
+    const parse = (
+      value: unknown,
+    ):
+      | { success: true; data: Record<string, unknown> | unknown[] }
+      | { success: false; error: { issues: unknown } } => {
+      const result = CARD_SCHEMA_BY_SECTION[section].safeParse(
+        dropAllNullEntries(value),
+      );
+      return result.success
+        ? {
+            success: true,
+            data: result.data as Record<string, unknown> | unknown[],
+          }
+        : { success: false, error: { issues: result.error.issues } };
     };
 
-    const outcome = await this.completeWithRetries(extractionMessages, extractJsonValue, parse, [JSON_ONLY_REMINDER], EXTRACTION_CALL);
+    const outcome = await this.completeWithRetries(
+      extractionMessages,
+      extractJsonValue,
+      parse,
+      [JSON_ONLY_REMINDER],
+      EXTRACTION_CALL,
+    );
     if (!outcome.success) {
-      this.logger.warn(`Extraction failed after all retries (section: ${section}).`);
+      this.logger.warn(
+        `Extraction failed after all retries (section: ${section}).`,
+      );
       return { kind: 'failed' };
     }
 
@@ -401,18 +565,40 @@ export class SectionReplyService {
     // onto a closing "مفيش"/"خلاص" in the last message and wipe out real entries mentioned earlier in the
     // same section. Only worth double-checking when there was more than one user turn — a section closed
     // on the very first reply was never going to have anything to lose.
-    const hadMultipleUserTurns = sectionHistory.filter((entry) => entry.role === 'user').length > 1;
-    if (Array.isArray(outcome.data) && outcome.data.length === 0 && hadMultipleUserTurns) {
-      this.logger.warn(`Extraction returned an empty array after multiple user turns (section: ${section}) — re-checking once.`);
-      const recheckMessages: LlmMessage[] = [...extractionMessages, { role: 'assistant', content: JSON.stringify(outcome.data) }, { role: 'user', content: EMPTY_ARRAY_REMINDER }];
-      const recheckOutcome = await this.completeWithRetries(recheckMessages, extractJsonValue, parse, [], EXTRACTION_CALL);
+    const hadMultipleUserTurns =
+      sectionHistory.filter((entry) => entry.role === 'user').length > 1;
+    if (
+      Array.isArray(outcome.data) &&
+      outcome.data.length === 0 &&
+      hadMultipleUserTurns
+    ) {
+      this.logger.warn(
+        `Extraction returned an empty array after multiple user turns (section: ${section}) — re-checking once.`,
+      );
+      const recheckMessages: LlmMessage[] = [
+        ...extractionMessages,
+        { role: 'assistant', content: JSON.stringify(outcome.data) },
+        { role: 'user', content: EMPTY_ARRAY_REMINDER },
+      ];
+      const recheckOutcome = await this.completeWithRetries(
+        recheckMessages,
+        extractJsonValue,
+        parse,
+        [],
+        EXTRACTION_CALL,
+      );
 
       if (!recheckOutcome.success) {
         return { kind: 'failed' };
       }
-      if (Array.isArray(recheckOutcome.data) && recheckOutcome.data.length === 0) {
+      if (
+        Array.isArray(recheckOutcome.data) &&
+        recheckOutcome.data.length === 0
+      ) {
         // Empty twice, from the (stronger) extraction model: the user most likely has nothing here.
-        this.logger.warn(`Extraction still empty after re-check (section: ${section}).`);
+        this.logger.warn(
+          `Extraction still empty after re-check (section: ${section}).`,
+        );
         return { kind: 'empty' };
       }
       return { kind: 'card', card: recheckOutcome.data };
@@ -430,7 +616,11 @@ export class SectionReplyService {
   private async completeWithRetries<T>(
     messages: LlmMessage[],
     extract: (raw: string) => string,
-    validate: (value: unknown) => { success: true; data: T } | { success: false; error: { issues: unknown } },
+    validate: (
+      value: unknown,
+    ) =>
+      | { success: true; data: T }
+      | { success: false; error: { issues: unknown } },
     reminders: string[],
     call: CallKind = CONVERSATION_CALL,
   ): Promise<RetryOutcome<T>> {
@@ -445,11 +635,17 @@ export class SectionReplyService {
         if (result.success) {
           return result;
         }
-        this.logger.warn(`Output failed validation on attempt ${attempt + 1}: ${JSON.stringify(result.error.issues)}`);
+        this.logger.warn(
+          `Output failed validation on attempt ${attempt + 1}: ${JSON.stringify(result.error.issues)}`,
+        );
       }
 
       if (attempt < reminders.length) {
-        currentMessages = [...currentMessages, { role: 'assistant', content: raw }, { role: 'user', content: reminders[attempt] as string }];
+        currentMessages = [
+          ...currentMessages,
+          { role: 'assistant', content: raw },
+          { role: 'user', content: reminders[attempt] as string },
+        ];
       }
     }
 
@@ -458,14 +654,24 @@ export class SectionReplyService {
 
   private complete(messages: LlmMessage[], call: CallKind): Promise<string> {
     const llm = call === EXTRACTION_CALL ? this.extractionLlm : this.llm;
-    return llm.complete({ messages, temperature: call === EXTRACTION_CALL ? 0 : 0.4, jsonMode: true });
+    return llm.complete({
+      messages,
+      temperature: call === EXTRACTION_CALL ? 0 : 0.4,
+      jsonMode: true,
+    });
   }
 
-  private tryParse(raw: string, extract: (raw: string) => string, isRetry = false): unknown {
+  private tryParse(
+    raw: string,
+    extract: (raw: string) => string,
+    isRetry = false,
+  ): unknown {
     try {
       return JSON.parse(extract(raw));
     } catch {
-      this.logger.warn(`AI output was not valid JSON${isRetry ? ' (after retry)' : ''}: ${raw}`);
+      this.logger.warn(
+        `AI output was not valid JSON${isRetry ? ' (after retry)' : ''}: ${raw}`,
+      );
       return undefined;
     }
   }

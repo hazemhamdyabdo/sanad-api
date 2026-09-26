@@ -1,5 +1,20 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryColumn,
+} from 'typeorm';
 import type { UploadStatus } from '../../../common/types/contract.js';
+
+/**
+ * Why an upload ended `failed` — each maps to its own Egyptian Arabic message in `UploadService`.
+ * `unreadable`: the model could not produce a valid analysis of this file. `timeout`: the analysis
+ * ran past its deadline. `interrupted`: the row was still `parsing` long after any analysis could
+ * be running (the API restarted mid-way). `internal`: anything else that threw.
+ */
+export type UploadErrorCode =
+  'unreadable' | 'timeout' | 'interrupted' | 'internal';
 
 /**
  * Transient processing bookkeeping only — never the long-lived profile. The uploaded file is kept
@@ -33,6 +48,11 @@ export class Upload {
   @Column('varchar')
   mimeType!: string;
 
+  /** Set together with `status: 'failed'` — picks the message the app shows. */
+  @Column({ type: 'varchar', nullable: true })
+  errorCode!: UploadErrorCode | null;
+
+  /** Technical detail of a failure for logs/debugging — never sent to the app. */
   @Column({ type: 'text', nullable: true })
   error!: string | null;
 

@@ -1,6 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { fetchWithTimeout, TimeoutError } from '../../../common/timeout.js';
-import type { LlmCompletionOptions, LlmMessage, LlmProvider } from '../llm.interface.js';
+import type {
+  LlmCompletionOptions,
+  LlmMessage,
+  LlmProvider,
+} from '../llm.interface.js';
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
 /**
@@ -11,8 +15,13 @@ const DEFAULT_COMPLETION_TIMEOUT_MS = 90_000;
 /** A stream that goes quiet this long — no headers, no next chunk — is dead, not thinking. */
 const STREAM_IDLE_TIMEOUT_MS = 60_000;
 
-type MistralContentPart = { type: 'text'; text: string } | { type: 'document_url'; document_url: string };
-type MistralMessage = { role: LlmMessage['role']; content: string | MistralContentPart[] };
+type MistralContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'document_url'; document_url: string };
+type MistralMessage = {
+  role: LlmMessage['role'];
+  content: string | MistralContentPart[];
+};
 
 /** Mistral's chat completions API wants `content` as a plain string for a text-only message, or an array of typed parts once a document (or image) is attached — never both. */
 function toMistralMessages(messages: LlmMessage[]): MistralMessage[] {
@@ -20,9 +29,14 @@ function toMistralMessages(messages: LlmMessage[]): MistralMessage[] {
     if (!message.documents?.length) {
       return { role: message.role, content: message.content };
     }
-    const parts: MistralContentPart[] = [{ type: 'text', text: message.content }];
+    const parts: MistralContentPart[] = [
+      { type: 'text', text: message.content },
+    ];
     for (const doc of message.documents) {
-      parts.push({ type: 'document_url', document_url: `data:${doc.mimeType};base64,${doc.data.toString('base64')}` });
+      parts.push({
+        type: 'document_url',
+        document_url: `data:${doc.mimeType};base64,${doc.data.toString('base64')}`,
+      });
     }
     return { role: message.role, content: parts };
   });
@@ -65,7 +79,9 @@ export class MistralProvider implements LlmProvider {
           temperature: options.temperature,
           max_tokens: options.maxTokens,
           stream: false,
-          response_format: options.jsonMode ? { type: 'json_object' } : undefined,
+          response_format: options.jsonMode
+            ? { type: 'json_object' }
+            : undefined,
         }),
       },
       timeoutMs,
@@ -78,7 +94,9 @@ export class MistralProvider implements LlmProvider {
 
     const data = (await response.json()) as MistralChatResponse;
     if (data.usage) {
-      this.logger.log(`usage: prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens} model=${this.model}`);
+      this.logger.log(
+        `usage: prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens} model=${this.model}`,
+      );
     }
     return data.choices[0]?.message.content ?? '';
   }
@@ -94,7 +112,12 @@ export class MistralProvider implements LlmProvider {
       idleTimer = setTimeout(() => controller.abort(), STREAM_IDLE_TIMEOUT_MS);
     };
     const asTimeout = (error: unknown): unknown =>
-      controller.signal.aborted ? new TimeoutError(`Mistral chat stream (${this.model}) idle`, STREAM_IDLE_TIMEOUT_MS) : error;
+      controller.signal.aborted
+        ? new TimeoutError(
+            `Mistral chat stream (${this.model}) idle`,
+            STREAM_IDLE_TIMEOUT_MS,
+          )
+        : error;
 
     armIdleTimer();
     let response: Response;
@@ -108,7 +131,9 @@ export class MistralProvider implements LlmProvider {
           temperature: options.temperature,
           max_tokens: options.maxTokens,
           stream: true,
-          response_format: options.jsonMode ? { type: 'json_object' } : undefined,
+          response_format: options.jsonMode
+            ? { type: 'json_object' }
+            : undefined,
         }),
         signal: controller.signal,
       });

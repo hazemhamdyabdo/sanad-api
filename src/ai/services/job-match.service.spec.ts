@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { LlmCompletionOptions, LlmProvider } from '../../integrations/llm/llm.interface.js';
+import type {
+  LlmCompletionOptions,
+  LlmProvider,
+} from '../../integrations/llm/llm.interface.js';
 import type { MatchCandidate, MatchJob } from '../schemas/job-match.schema.js';
 import { JobMatchService } from './job-match.service.js';
 
@@ -20,12 +23,19 @@ const candidate: MatchCandidate = {
 };
 
 const jobs: MatchJob[] = [
-  { id: 'a', title: 'Accountant', company: null, description: 'Excel and SAP required' },
+  {
+    id: 'a',
+    title: 'Accountant',
+    company: null,
+    description: 'Excel and SAP required',
+  },
   { id: 'b', title: 'Junior Accountant', company: null, description: 'Excel' },
 ];
 
 /** An LLM that answers from a queue and records every call. */
-function fakeLlm(replies: unknown[]): LlmProvider & { calls: LlmCompletionOptions[] } {
+function fakeLlm(
+  replies: unknown[],
+): LlmProvider & { calls: LlmCompletionOptions[] } {
   const calls: LlmCompletionOptions[] = [];
   return {
     calls,
@@ -46,11 +56,20 @@ describe('JobMatchService language handling', () => {
     const llm = fakeLlm([
       {
         matches: [
-          { jobId: 'a', match: 88, whyMatch: ['Excel and SAP experience', '3 years accounting'], gaps: [] },
+          {
+            jobId: 'a',
+            match: 88,
+            whyMatch: ['Excel and SAP experience', '3 years accounting'],
+            gaps: [],
+          },
           { jobId: 'b', match: 75, whyMatch: ['خبرة Excel متقدمة'], gaps: [] },
         ],
       },
-      { matches: [{ jobId: 'a', match: 88, whyMatch: ['خبرة Excel و SAP'], gaps: [] }] },
+      {
+        matches: [
+          { jobId: 'a', match: 88, whyMatch: ['خبرة Excel و SAP'], gaps: [] },
+        ],
+      },
     ]);
     const service = new JobMatchService(llm);
 
@@ -62,11 +81,19 @@ describe('JobMatchService language handling', () => {
     const retry = llm.calls[1];
     expect(retry.temperature).toBeGreaterThan(0);
     // Only job "a" is re-asked.
-    const userMessages = retry.messages.filter((message) => message.role === 'user');
+    const userMessages = retry.messages.filter(
+      (message) => message.role === 'user',
+    );
     expect(userMessages[0].content).toContain('"id":"a"');
     expect(userMessages[0].content).not.toContain('"id":"b"');
     // The previous reply and a correction naming the language rule are in context.
-    expect(retry.messages.some((message) => message.role === 'assistant' && message.content.includes('Excel and SAP experience'))).toBe(true);
+    expect(
+      retry.messages.some(
+        (message) =>
+          message.role === 'assistant' &&
+          message.content.includes('Excel and SAP experience'),
+      ),
+    ).toBe(true);
     expect(userMessages.at(-1)?.content).toContain('بالمصري');
     expect(userMessages.at(-1)?.content).toContain('a');
 
@@ -78,7 +105,12 @@ describe('JobMatchService language handling', () => {
     const llm = fakeLlm([
       {
         matches: [
-          { jobId: 'a', match: 80, whyMatch: ['خبرة Excel متقدمة', 'SAP experience'], gaps: ['Requires CPA', 'مطلوب شهادة CPA'] },
+          {
+            jobId: 'a',
+            match: 80,
+            whyMatch: ['خبرة Excel متقدمة', 'SAP experience'],
+            gaps: ['Requires CPA', 'مطلوب شهادة CPA'],
+          },
           { jobId: 'b', match: 70, whyMatch: ['خبرة Excel متقدمة'], gaps: [] },
         ],
       },
@@ -93,8 +125,17 @@ describe('JobMatchService language handling', () => {
   });
 
   it('gives up on a job that stays English after every attempt and returns the rest', async () => {
-    const english = { matches: [{ jobId: 'a', match: 90, whyMatch: ['Excel expert'], gaps: [] }, { jobId: 'b', match: 70, whyMatch: ['خبرة Excel متقدمة'], gaps: [] }] };
-    const stillEnglish = { matches: [{ jobId: 'a', match: 90, whyMatch: ['Excel expert'], gaps: [] }] };
+    const english = {
+      matches: [
+        { jobId: 'a', match: 90, whyMatch: ['Excel expert'], gaps: [] },
+        { jobId: 'b', match: 70, whyMatch: ['خبرة Excel متقدمة'], gaps: [] },
+      ],
+    };
+    const stillEnglish = {
+      matches: [
+        { jobId: 'a', match: 90, whyMatch: ['Excel expert'], gaps: [] },
+      ],
+    };
     const llm = fakeLlm([english, stillEnglish, stillEnglish]);
     const service = new JobMatchService(llm);
 
